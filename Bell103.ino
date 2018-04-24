@@ -60,21 +60,26 @@ const uint16_t  wvPtsFull = 2 * wvPtsHalf;
 const uint8_t wvStep[] = {(wvPtsFull * (uint32_t)txSpce + FRQ_SAMPLE / 2) / FRQ_SAMPLE, // 29
                           (wvPtsFull * (uint32_t)txMark + FRQ_SAMPLE / 2) / FRQ_SAMPLE  // 34
                          };
-const uint8_t wvStepMax = FRQ_SAMPLE / BAUD;
+const uint8_t txMaxSamples = FRQ_SAMPLE / BAUD;
+
+enum TX_STATE {HEAD, STARTBIT, DATABIT, STOPBIT, TAIL};
 
 // Keep track if we are sending the start (1) or
 // stop bit (3), the data bits (2) or nothing (0)
-uint8_t txState = 0;
+uint8_t txState = HEAD;
 uint8_t txOn = 0;
 uint8_t txData;
 // Momentary TX index
 uint8_t txIdx = 0;
 // Momentary counter
-uint8_t txCount = 0;
+uint8_t txCountSamples = 0;
 // Keep track of what we are TX'ing now
 uint8_t txIdxStep;
 uint8_t txBit;
 uint8_t txBitCount;
+
+uint8_t txCarrierCount = 0;
+uint8_t txCarrierMax = 10; // BAUD
 
 
 
@@ -116,15 +121,20 @@ inline uint8_t wvSample(uint8_t idx) {
   Send char array
 */
 uint8_t txSend(char* chr, size_t len) {
+  txOn = 1;
+  txState = HEAD;
+  txCarrierCount = 0;
+  txBit = MARK;
+  txIdx = 0;
   for (uint8_t i = 0; i < len; i++) {
     txData = chr[i];
-    txOn = 1;
     while (txOn) wvOut();
   }
+  txState = TAIL;
 }
 
 uint8_t wvOut() {
-  // First thing first: get the result
+  // First thing first: output the sample
   uint8_t result = wvSample(txIdx);
 
   // Check if we are TX'ing
@@ -132,64 +142,68 @@ uint8_t wvOut() {
 
     Serial.print(txBit * 100);
     Serial.print(" ");
-    Serial.print(txCount);
+    Serial.print(txCountSamples);
     Serial.print(" ");
     Serial.println(result);
 
 
-    // Check if we reached the maximum
-    if (txCount >= wvStepMax) {
-      // Reset the counter
-      txCount = 0;
-      // Get the next bit to send
-      if (txState == 0) {
-        // We have sent nothing, start with the start bit
-        txState = 1;
-        txBit = 1;
-      }
-      else if (txState == 1) {
-        // We have sent the start bit, go on with data bits
-        txState = 2;
-        txBit = txData & 0x01;
-        txData = txData >> 1;
-        txBitCount = 0;
-      }
-      else if (txState == 2) {
-        // We are sending the data bits, count them
-        txBitCount++;
-        if (txBitCount < 8) {
-          // Keep sending the data bits
+    // Check if we have sent all samples for a bit
+    if (txCountSamples >= txMaxSamples) {
+      // Reset the samples counter
+      txCountSamples = 0;
+      // Get the next bit to send, according to current state
+      switch (txState) {
+        case HEAD:  // We are sending the head carrier
+          if (++txCarrierCount >= txCarrierMax) {
+            // Carrier sent, go to the start bit
+            txState = STARTBIT;
+            txBit = SPACE;
+          }
+          break;
+        case STARTBIT:  // We have sent the start bit, go on with data bits
+          txState = DATABIT;
           txBit = txData & 0x01;
           txData = txData >> 1;
-        }
-        else {
-          // We have sent all the data bits, send the stop bit
-          txState = 3;
-          txBit = 0;
-        }
+          txBitCount = 0;
+          break;
+        case DATABIT:
+          // We are sending the data bits, count them
+          if (++txBitCount < 8) {
+            // Keep sending the data bits
+            txBit = txData & 0x01;
+            txData = txData >> 1;
+          }
+          else {
+            // We have sent all the data bits, send the stop bit
+            txState = STOPBIT;
+            txBit = MARK;
+          }
+          break;
+        case STOPBIT:
+          // We have sent the stop bit, send the tail carrier
+          txState = TAIL;
+          txBit = MARK;
+          txCarrierCount = 0;
+          break;
+        case TAIL:
+          // We are sending the tail (carrier)
+          if (++txCarrierCount >= txCarrierMax)
+            txOn = 0;
+          break;
       }
-      else if (txState == 3) {
-        // We have sent the stop bit, disable TX
-        txState = 0;
-        txBit = 1;
-        txOn = 0;
-      }
-    }
 
-    // Check if we switched the tone
-    if (txIdxStep != wvStep[txBit]) {
-      // Use the new step
-      txIdxStep = wvStep[txBit];
-      // Reset the counter
-      txCount = 0;
+      // Check if we switched the bit
+      if (txIdxStep != wvStep[txBit]) {
+        // Use the new step
+        txIdxStep = wvStep[txBit];
+        // Reset the samples counter
+        txCountSamples = 0;
+      }
     }
 
     // Increase the index and counter for next sample
-    txIdx += wvStep[txBit];
-    txCount++;
-
-
-
+    txIdx += txIdxStep;
+    txCountSamples++;
   }
   return result;
 }
@@ -201,21 +215,8 @@ uint8_t wvOut() {
 void setup() {
   Serial.begin(9600);
 
-  //Serial.println(wvMaxCount[SPACE]);
-  //Serial.println(wvMaxCount[MARK]);
-
-  /*
-    txOn = 1;
-    txData = 0xAA;
-    for (uint16_t x = 0; x <= 400; x++) {
-      uint8_t y = wvOut();
-      delay(1);
-    }
-  */
-
-  char text[] = "Mama are mere.";
+  char text[] = "AT";
   txSend(text, strlen(text));
-
 }
 
 /**
