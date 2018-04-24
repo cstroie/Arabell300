@@ -135,19 +135,21 @@ uint8_t txSend(char* chr, size_t len) {
 }
 
 uint8_t wvOut() {
-  // First thing first: output the sample
+  // First thing first: get the sample
   uint8_t result = wvSample(txIdx);
 
   // Check if we are TX'ing
   if (txOn > 0) {
+    // Output the sample
+    PORTD = (result & 0xF0) | _BV(3);
 
-    Serial.print(txBit * 100);
-    Serial.print(" ");
+    //Serial.print(txBit * 100);
+    //Serial.print(" ");
     //Serial.print(txCountSamples);
     //Serial.print(" ");
     //Serial.print(txState * 100);
     //Serial.print(" ");
-    Serial.println(result);
+    //Serial.println(result);
 
     //Serial.print((result >> 4) & 0x0F, 16);
     //Serial.print(result & 0x0F, 16);
@@ -261,7 +263,7 @@ uint8_t wvOut() {
     txIdx += txIdxStep;
     txCountSamples++;
   }
-  return result;
+  //return result;
 }
 
 void checkSerial() {
@@ -279,6 +281,11 @@ void checkSerial() {
   }
 }
 
+// ADC Interrupt vector
+ISR(ADC_vect) {
+  TIFR1 = _BV(ICF1);
+  wvOut();
+}
 
 /**
   Main Arduino setup function
@@ -286,16 +293,35 @@ void checkSerial() {
 void setup() {
   Serial.begin(9600);
 
-  //char text[] = "Mama are mere.";
-  char text[] = "A";
-  txSend(text, strlen(text));
+  // TC1 Control Register B: No prescaling, WGM mode 12
+  TCCR1A = 0;
+  TCCR1B = _BV(CS10) | _BV(WGM13) | _BV(WGM12);
+  // Top set for 9600 baud
+  ICR1 = (F_CPU / FRQ_SAMPLE) - 1;
+
+  // Vcc with external capacitor at AREF pin, ADC Left Adjust Result
+  ADMUX = _BV(REFS0) | _BV(ADLAR);
+
+  // Port C Data Direction Register
+  DDRC  &= ~_BV(0);
+  // Port C Data Register
+  PORTC &= ~_BV(0);
+  // Digital Input Disable Register 0
+  DIDR0 |= _BV(0);
+
+  // Timer/Counter1 Capture Event
+  ADCSRB = _BV(ADTS2) | _BV(ADTS1) | _BV(ADTS0);
+  // ADC Enable, ADC Start Conversion, ADC Auto Trigger Enable,
+  // ADC Interrupt Enable, ADC Prescaler 16
+  ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADATE) | _BV(ADIE) | _BV(ADPS2);
+
+  // DAC init
+  DDRD |= 0xF8;
 }
 
 /**
   Main Arduino loop
 */
 void loop() {
-  wvOut();
-
   checkSerial();
 }
