@@ -33,11 +33,11 @@
 // Sampling frequency
 #define FRQ_SAMPLE  9600
 #define BAUD        300
+#define DATABITS    8
 #define STARTBITS   1
 #define STOPBITS    1
 // Mark and space
-#define MARK        1
-#define SPACE       0
+enum TX_BIT {SPACE, MARK, NONE};
 
 // Mark and space, TX and RX frequencies
 const uint16_t txSpce = 1070;  // 934uS  14953CPU
@@ -61,28 +61,28 @@ const uint8_t   wvPtsHalf = 2 * wvPtsQart;
 const uint16_t  wvPtsFull = 2 * wvPtsHalf;
 // Wave index steps
 const uint8_t wvStep[] = {(wvPtsFull * (uint32_t)txSpce + FRQ_SAMPLE / 2) / FRQ_SAMPLE, // 29
-                          (wvPtsFull * (uint32_t)txMark + FRQ_SAMPLE / 2) / FRQ_SAMPLE  // 34
+                          (wvPtsFull * (uint32_t)txMark + FRQ_SAMPLE / 2) / FRQ_SAMPLE, // 34
+                          0
                          };
-const uint8_t txMaxSamples = FRQ_SAMPLE / BAUD;
+const uint8_t txMaxSamples = FRQ_SAMPLE / BAUD; // Number of samples to send for each serial bit
+uint8_t txCountSamples = 0;        // Samples counter for each serial bit
 
-enum TX_STATE {HEAD, STARTBIT, DATABIT, STOPBIT, TAIL};
+enum TX_STATE {HEADCARR, STARTBIT, DATABIT, STOPBIT, TAILCARR, OFFCARR};
 
 // Keep track if we are sending the start (1) or
 // stop bit (3), the data bits (2) or nothing (0)
-uint8_t txState = HEAD;
+uint8_t txState = OFFCARR;
 uint8_t txOn = 0;
 uint8_t txData;
 // Momentary TX index
 uint8_t txIdx = 0;
-// Momentary counter
-uint8_t txCountSamples = 0;
 // Keep track of what we are TX'ing now
 uint8_t txIdxStep;
-uint8_t txBit;
+uint8_t txBit = NONE;
 uint8_t txBitCount;
 
 uint8_t txCarrierCount = 0;
-uint8_t txCarrierMax = 10; // BAUD
+uint8_t txCarrierMax = 2; // BAUD
 
 
 // FIFO
@@ -127,14 +127,11 @@ inline uint8_t wvSample(uint8_t idx) {
 */
 uint8_t txSend(char* chr, size_t len) {
   txOn = 1;
-  txState = HEAD;
-  txCarrierCount = 0;
-  txBit = MARK;
-  txIdx = 0;
+  //txState = OFFCARR;
   for (uint8_t i = 0; i < len; i++) {
     txFIFO.in(chr[i]);
   }
-  while (txOn) wvOut();
+  //while (true) wvOut();
 }
 
 uint8_t wvOut() {
@@ -144,9 +141,11 @@ uint8_t wvOut() {
   // Check if we are TX'ing
   if (txOn > 0) {
 
-    //Serial.print(txBit * 100);
-    //Serial.print(" ");
+    Serial.print(txBit * 100);
+    Serial.print(" ");
     //Serial.print(txCountSamples);
+    //Serial.print(" ");
+    //Serial.print(txState * 100);
     //Serial.print(" ");
     Serial.println(result);
 
@@ -154,29 +153,48 @@ uint8_t wvOut() {
     //Serial.print(result & 0x0F, 16);
 
 
-    // Check if we have sent all samples for a bit
+    // Check if we have sent all samples for a bit.
     if (txCountSamples >= txMaxSamples) {
       // Reset the samples counter
       txCountSamples = 0;
-      // Get the next bit to send, according to current state
+
+      // One bit finished, check the state and choose the next bit and state
       switch (txState) {
-        case HEAD:  // We are sending the head carrier
+
+        // We have been off, prepare the transmission
+        case OFFCARR:
+          txState = HEADCARR;
+          txBit = MARK;
+          txCarrierCount = 0;
+          txIdx = 0;
+          if (not txFIFO.empty())
+            txData = txFIFO.out();
+          break;
+
+        // We are sending the head carrier
+        case HEADCARR:
+          // Check if we have sent the carrier long enough
           if (++txCarrierCount >= txCarrierMax) {
             // Carrier sent, go to the start bit
             txState = STARTBIT;
             txBit = SPACE;
           }
           break;
-        case STARTBIT:  // We have sent the start bit, go on with data bits
+
+        // We have sent the start bit, go on with data bits
+        case STARTBIT:
           txState = DATABIT;
+          txBitCount = 0;
+          // LSB first
           txBit = txData & 0x01;
           txData = txData >> 1;
-          txBitCount = 0;
           break;
+
+        // We are sending the data bits, count them
         case DATABIT:
-          // We are sending the data bits, count them
-          if (++txBitCount < 8) {
-            // Keep sending the data bits
+          // Check if we have sent all the bits
+          if (++txBitCount < DATABITS) {
+            // Keep sending the data bits, LSB to MSB
             txBit = txData & 0x01;
             txData = txData >> 1;
           }
@@ -186,30 +204,53 @@ uint8_t wvOut() {
             txBit = MARK;
           }
           break;
+
+        // We have sent the stop bit, try to get the next byte
         case STOPBIT:
-          // We have sent the stop bit, get the next byte
+          // Check the TX FIFO
           if (txFIFO.empty()) {
-            txState = TAIL;
+            // No more data to send, go on with the tail carrier
+            txState = TAILCARR;
             txBit = MARK;
             txCarrierCount = 0;
           }
           else {
+            // There is more data, get it and return to the start bit
             txState = STARTBIT;
             txBit = SPACE;
             txData = txFIFO.out();
             //Serial.println();
           }
           break;
-        case TAIL:
-          // We are sending the tail (carrier)
-          if (++txCarrierCount >= txCarrierMax)
+
+        // We are sending the tail carrier
+        case TAILCARR:
+          // Check if we have sent the carrier long enough
+          if (++txCarrierCount > txCarrierMax) {
+            // Disable TX
             txOn = 0;
+            txState = OFFCARR;
+          }
+          else if (txCarrierCount == txCarrierMax) {
+            // After the last tail carrier bit, send isoelectric line
+            txBit = NONE;
+            // Prepare for the next TX
+            txIdx = 0;
+            txCountSamples = 0;
+          }
+          // Check the TX FIFO again...
+          else if (not txFIFO.empty()) {
+            // There is new data in FIFO, start over
+            txState = STARTBIT;
+            txBit = SPACE;
+            txData = txFIFO.out();
+          }
           break;
       }
 
       // Check if we switched the bit
       if (txIdxStep != wvStep[txBit]) {
-        // Use the new step
+        // Use the step of the new bit
         txIdxStep = wvStep[txBit];
         // Reset the samples counter
         txCountSamples = 0;
@@ -223,6 +264,21 @@ uint8_t wvOut() {
   return result;
 }
 
+void checkSerial() {
+  // Check any command on serial port
+  uint8_t c = Serial.peek();
+  if (c != 0xFF) {
+    // There is data on serial port
+    if (not txFIFO.full()) {
+      // We can send the data
+      c = Serial.read();
+      txFIFO.in(c);
+      // Keep TX'ing
+      txOn = 1;
+    }
+  }
+}
+
 
 /**
   Main Arduino setup function
@@ -230,7 +286,8 @@ uint8_t wvOut() {
 void setup() {
   Serial.begin(9600);
 
-  char text[] = "Mama are mere.";
+  //char text[] = "Mama are mere.";
+  char text[] = "A";
   txSend(text, strlen(text));
 }
 
@@ -238,5 +295,7 @@ void setup() {
   Main Arduino loop
 */
 void loop() {
+  wvOut();
 
+  checkSerial();
 }
