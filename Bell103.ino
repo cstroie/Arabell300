@@ -27,6 +27,9 @@
 
 */
 
+#include "fifo.h"
+
+
 // Sampling frequency
 #define FRQ_SAMPLE  9600
 #define BAUD        300
@@ -83,38 +86,8 @@ uint8_t txCarrierMax = 10; // BAUD
 
 
 // FIFO
-const uint8_t fifoSize = 4;
-uint8_t FIFO[1 << fifoSize] = {0};
-uint8_t fifoIdxIn = 0;
-uint8_t fifoIdxOut = 0;
+FIFO txFIFO(5);
 
-inline bool fifoFull() {
-  return (fifoIdxOut > fifoIdxIn) ? (fifoIdxOut - fifoIdxIn == 1) : (fifoIdxOut - fifoIdxIn + 1 << fifoSize == 1);
-}
-
-inline bool fifoEmpty() {
-  return fifoIdxIn == fifoIdxOut;
-}
-
-inline bool fifoLen() {
-  return (fifoIdxIn < fifoIdxOut) ? (1 << fifoSize + fifoIdxIn - fifoIdxOut) : (fifoIdxIn - fifoIdxOut);
-}
-
-inline bool fifoIn(uint8_t x) {
-  if (not fifoFull()) {
-    FIFO[fifoIdxIn] = x;
-    fifoIdxIn = (fifoIdxIn + 1) & ((1 << fifoSize) - 1);
-  }
-}
-
-inline uint8_t fifoOut() {
-  uint8_t x = 0;
-  if (not fifoEmpty()) {
-    x = FIFO[fifoIdxOut];
-    fifoIdxOut = (fifoIdxOut + 1) & ((1 << fifoSize) - 1);
-  }
-  return x;
-}
 
 /**
   Linear interpolation
@@ -159,7 +132,7 @@ uint8_t txSend(char* chr, size_t len) {
   txBit = MARK;
   txIdx = 0;
   for (uint8_t i = 0; i < len; i++) {
-    fifoIn(chr[i]);
+    txFIFO.in(chr[i]);
   }
   while (txOn) wvOut();
 }
@@ -215,7 +188,7 @@ uint8_t wvOut() {
           break;
         case STOPBIT:
           // We have sent the stop bit, get the next byte
-          if (fifoEmpty()) {
+          if (txFIFO.empty()) {
             txState = TAIL;
             txBit = MARK;
             txCarrierCount = 0;
@@ -223,7 +196,7 @@ uint8_t wvOut() {
           else {
             txState = STARTBIT;
             txBit = SPACE;
-            txData = fifoOut();
+            txData = txFIFO.out();
             //Serial.println();
           }
           break;
