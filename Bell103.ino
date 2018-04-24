@@ -141,7 +141,9 @@ uint8_t wvOut() {
   // Check if we are TX'ing
   if (txOn > 0) {
     // Output the sample
-    PORTD = (result & 0xF0) | _BV(3);
+    //PORTD = (result & 0xF0) | _BV(3);
+    //OCR2A = result;
+    OCR2B = result;
 
     //Serial.print(txBit * 100);
     //Serial.print(" ");
@@ -297,7 +299,7 @@ void setup() {
   TCCR1A = 0;
   TCCR1B = _BV(CS10) | _BV(WGM13) | _BV(WGM12);
   // Top set for 9600 baud
-  ICR1 = (F_CPU / FRQ_SAMPLE) - 1;
+  ICR1 = ((F_CPU - 120000L) / FRQ_SAMPLE) - 1;
 
   // Vcc with external capacitor at AREF pin, ADC Left Adjust Result
   ADMUX = _BV(REFS0) | _BV(ADLAR);
@@ -316,7 +318,38 @@ void setup() {
   ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADATE) | _BV(ADIE) | _BV(ADPS2);
 
   // DAC init
-  DDRD |= 0xF8;
+  //DDRD |= 0xF8;
+
+
+  // Set up Timer 2 to do pulse width modulation on the speaker pin.
+
+  pinMode(3, OUTPUT);
+  // Use internal clock (datasheet p.160)
+  ASSR &= ~(_BV(EXCLK) | _BV(AS2));
+
+  // Set fast PWM mode  (p.157)
+  TCCR2A |= _BV(WGM21) | _BV(WGM20);
+  TCCR2B &= ~_BV(WGM22);
+
+  /*
+    // Do non-inverting PWM on pin OC2A (p.155)
+    // On the Arduino this is pin 11.
+    TCCR2A = (TCCR2A | _BV(COM2A1)) & ~_BV(COM2A0);
+    TCCR2A &= ~(_BV(COM2B1) | _BV(COM2B0));
+    // No prescaler (p.158)
+    TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
+
+    // Set initial pulse width to the first sample.
+    OCR2A = 128;
+  */
+  // Do non-inverting PWM on pin OC2B (p.155)
+  // On the Arduino this is pin 3.
+  TCCR2A = (TCCR2A | _BV(COM2B1)) & ~_BV(COM2B0);
+  TCCR2A &= ~(_BV(COM2A1) | _BV(COM2A0));
+  // No prescaler (p.158)
+  TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
+
+  OCR2B = 128;
 }
 
 /**
