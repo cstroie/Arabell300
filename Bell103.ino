@@ -82,7 +82,38 @@ uint8_t txCarrierCount = 0;
 uint8_t txCarrierMax = 10; // BAUD
 
 
+// Queue
+uint8_t qQueue[16] = {0};
+uint8_t qIdxIn = 0;
+uint8_t qIdxOut = 0;
 
+inline bool qFull() {
+  return (qIdxOut > qIdxIn) ? (qIdxOut - qIdxIn == 1) : (qIdxOut - qIdxIn + 16 == 1);
+}
+
+inline bool qEmpty() {
+  return qIdxIn == qIdxOut;
+}
+
+inline bool qLen() {
+  return (qIdxIn < qIdxOut) ? (16 + qIdxIn - qIdxOut) : (qIdxIn - qIdxOut);
+}
+
+inline bool qPush(uint8_t x) {
+  if (not qFull()) {
+    qQueue[qIdxIn] = x;
+    qIdxIn = (qIdxIn + 1) & 0x0F;
+  }
+}
+
+inline uint8_t qPop() {
+  uint8_t x = 0;
+  if (not qEmpty()) {
+    x = qQueue[qIdxOut];
+    qIdxOut = (qIdxOut + 1) & 0x0F;
+  }
+  return x;
+}
 
 /**
   Linear interpolation
@@ -127,10 +158,9 @@ uint8_t txSend(char* chr, size_t len) {
   txBit = MARK;
   txIdx = 0;
   for (uint8_t i = 0; i < len; i++) {
-    txData = chr[i];
-    while (txOn) wvOut();
+    qPush(chr[i]);
   }
-  txState = TAIL;
+  while (txOn) wvOut();
 }
 
 uint8_t wvOut() {
@@ -140,11 +170,12 @@ uint8_t wvOut() {
   // Check if we are TX'ing
   if (txOn > 0) {
 
-    Serial.print(txBit * 100);
-    Serial.print(" ");
-    Serial.print(txCountSamples);
-    Serial.print(" ");
-    Serial.println(result);
+    //Serial.print(txBit * 100);
+    //Serial.print(" ");
+    //Serial.print(txCountSamples);
+    //Serial.print(" ");
+    Serial.print((result >> 4) & 0x0F, 16);
+    Serial.print(result & 0x0F, 16);
 
 
     // Check if we have sent all samples for a bit
@@ -180,10 +211,18 @@ uint8_t wvOut() {
           }
           break;
         case STOPBIT:
-          // We have sent the stop bit, send the tail carrier
-          txState = TAIL;
-          txBit = MARK;
-          txCarrierCount = 0;
+          // We have sent the stop bit, get the next byte
+          if (qEmpty()) {
+            txState = TAIL;
+            txBit = MARK;
+            txCarrierCount = 0;
+          }
+          else {
+            txState = STARTBIT;
+            txBit = SPACE;
+            txData = qPop();
+            Serial.println();
+          }
           break;
         case TAIL:
           // We are sending the tail (carrier)
@@ -215,7 +254,7 @@ uint8_t wvOut() {
 void setup() {
   Serial.begin(9600);
 
-  char text[] = "AT";
+  char text[] = "Mama are mere.";
   txSend(text, strlen(text));
 }
 
