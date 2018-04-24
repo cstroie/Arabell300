@@ -82,35 +82,36 @@ uint8_t txCarrierCount = 0;
 uint8_t txCarrierMax = 10; // BAUD
 
 
-// Queue
-uint8_t qQueue[16] = {0};
-uint8_t qIdxIn = 0;
-uint8_t qIdxOut = 0;
+// FIFO
+const uint8_t fifoSize = 4;
+uint8_t FIFO[1 << fifoSize] = {0};
+uint8_t fifoIdxIn = 0;
+uint8_t fifoIdxOut = 0;
 
-inline bool qFull() {
-  return (qIdxOut > qIdxIn) ? (qIdxOut - qIdxIn == 1) : (qIdxOut - qIdxIn + 16 == 1);
+inline bool fifoFull() {
+  return (fifoIdxOut > fifoIdxIn) ? (fifoIdxOut - fifoIdxIn == 1) : (fifoIdxOut - fifoIdxIn + 1 << fifoSize == 1);
 }
 
-inline bool qEmpty() {
-  return qIdxIn == qIdxOut;
+inline bool fifoEmpty() {
+  return fifoIdxIn == fifoIdxOut;
 }
 
-inline bool qLen() {
-  return (qIdxIn < qIdxOut) ? (16 + qIdxIn - qIdxOut) : (qIdxIn - qIdxOut);
+inline bool fifoLen() {
+  return (fifoIdxIn < fifoIdxOut) ? (1 << fifoSize + fifoIdxIn - fifoIdxOut) : (fifoIdxIn - fifoIdxOut);
 }
 
-inline bool qPush(uint8_t x) {
-  if (not qFull()) {
-    qQueue[qIdxIn] = x;
-    qIdxIn = (qIdxIn + 1) & 0x0F;
+inline bool fifoIn(uint8_t x) {
+  if (not fifoFull()) {
+    FIFO[fifoIdxIn] = x;
+    fifoIdxIn = (fifoIdxIn + 1) & ((1 << fifoSize) - 1);
   }
 }
 
-inline uint8_t qPop() {
+inline uint8_t fifoOut() {
   uint8_t x = 0;
-  if (not qEmpty()) {
-    x = qQueue[qIdxOut];
-    qIdxOut = (qIdxOut + 1) & 0x0F;
+  if (not fifoEmpty()) {
+    x = FIFO[fifoIdxOut];
+    fifoIdxOut = (fifoIdxOut + 1) & ((1 << fifoSize) - 1);
   }
   return x;
 }
@@ -158,7 +159,7 @@ uint8_t txSend(char* chr, size_t len) {
   txBit = MARK;
   txIdx = 0;
   for (uint8_t i = 0; i < len; i++) {
-    qPush(chr[i]);
+    fifoIn(chr[i]);
   }
   while (txOn) wvOut();
 }
@@ -174,8 +175,10 @@ uint8_t wvOut() {
     //Serial.print(" ");
     //Serial.print(txCountSamples);
     //Serial.print(" ");
-    Serial.print((result >> 4) & 0x0F, 16);
-    Serial.print(result & 0x0F, 16);
+    Serial.println(result);
+
+    //Serial.print((result >> 4) & 0x0F, 16);
+    //Serial.print(result & 0x0F, 16);
 
 
     // Check if we have sent all samples for a bit
@@ -212,7 +215,7 @@ uint8_t wvOut() {
           break;
         case STOPBIT:
           // We have sent the stop bit, get the next byte
-          if (qEmpty()) {
+          if (fifoEmpty()) {
             txState = TAIL;
             txBit = MARK;
             txCarrierCount = 0;
@@ -220,8 +223,8 @@ uint8_t wvOut() {
           else {
             txState = STARTBIT;
             txBit = SPACE;
-            txData = qPop();
-            Serial.println();
+            txData = fifoOut();
+            //Serial.println();
           }
           break;
         case TAIL:
