@@ -81,8 +81,8 @@ uint8_t txIdxStep;
 uint8_t txBit = NONE;
 uint8_t txBitCount;
 
-uint8_t txCarrierCount = 0;
-uint8_t txCarrierMax = 2; // BAUD
+uint8_t txCarrierCount  = 0;
+uint8_t txCarrierMax    = 240;  // 800ms
 
 
 // FIFO
