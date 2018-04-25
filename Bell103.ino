@@ -37,11 +37,13 @@
 #define F_COR (-120000L)
 
 // Sampling frequency
-#define F_SAMPLE  9600
-#define BAUD      300
-#define DATABITS  8
-#define STARTBITS 1
-#define STOPBITS  1
+#define F_SAMPLE    9600
+#define BAUD        300
+#define DATA_BITS   8
+#define STRT_BITS   1
+#define STOP_BITS   1
+#define CARR_BITS   240
+#define BIT_SAMPLES (F_SAMPLE / BAUD)
 // Mark and space
 enum BIT {SPACE, MARK, NONE};
 
@@ -75,17 +77,6 @@ const uint8_t wvStep[] = {
   0
 };
 
-// Number of samples for each serial bit
-const uint8_t txSamplesMax  = F_SAMPLE / BAUD;
-// Samples counter for each serial bit
-uint8_t       txSamples     = 0;
-
-// Number of maximum carrier bits in preamble and trail
-const uint8_t txCarrierMax  = 240;  // 800ms
-// Carrier bits counter in preamble and trail
-uint8_t       txCarrierBits = 0;
-
-
 // States in TX state machine
 enum TX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, OFFLINE};
 
@@ -98,6 +89,7 @@ struct TX_t {
   uint8_t bits  = 0;        // already transmitted bits
   uint8_t idx   = 0;        // wave samples index (start with first sample)
   uint8_t step  = 0;        // wave samples increment step
+  uint8_t smpls = 0;        // samples counter for each bit
 } tx;
 
 // FIFO
@@ -172,9 +164,9 @@ void txHandle() {
     tx.idx += wvStep[tx.bit];
 
     // Check if we have sent all samples for a bit.
-    if (txSamples++ >= txSamplesMax) {
+    if (tx.smpls++ >= BIT_SAMPLES) {
       // Reset the samples counter
-      txSamples = 0;
+      tx.smpls  = 0;
 
       // One bit finished, check the state and choose the next bit and state
       switch (tx.state) {
@@ -183,7 +175,7 @@ void txHandle() {
           tx.state  = PREAMBLE;
           tx.bit    = MARK;
           tx.idx    = 0;
-          txCarrierBits = 0;
+          tx.bits   = 0;
           // Get data from FIFO, if any
           if (not txFIFO.empty())
             tx.data = txFIFO.out();
@@ -192,7 +184,7 @@ void txHandle() {
         // We are sending the preamble carrier
         case PREAMBLE:
           // Check if we have sent the carrier long enough
-          if (++txCarrierBits >= txCarrierMax) {
+          if (++tx.bits >= CARR_BITS) {
             // Carrier sent, go to the start bit
             tx.state  = START_BIT;
             tx.bit    = SPACE;
@@ -210,7 +202,7 @@ void txHandle() {
         // We are sending the data bits, keep sending until MSB
         case DATA_BIT:
           // Check if we have sent all the bits
-          if (++tx.bits < DATABITS) {
+          if (++tx.bits < DATA_BITS) {
             // Keep sending the data bits, LSB to MSB
             tx.bit  = tx.data & 0x01;
             tx.data = tx.data >> 1;
@@ -229,7 +221,7 @@ void txHandle() {
             // No more data to send, go on with the trail carrier
             tx.state  = TRAIL;
             tx.bit    = MARK;
-            txCarrierBits = 0;
+            tx.bits   = 0;
           }
           else {
             // There is still data, get one byte and return to the start bit
@@ -242,17 +234,17 @@ void txHandle() {
         // We are sending the trail carrier
         case TRAIL:
           // Check if we have sent the trail carrier long enough
-          if (++txCarrierBits > txCarrierMax) {
+          if (++tx.bits > CARR_BITS) {
             // Disable TX and go offline
             tx.onair  = 0;
             tx.state  = OFFLINE;
           }
-          else if (txCarrierBits == txCarrierMax) {
+          else if (tx.bits == CARR_BITS) {
             // After the last trail carrier bit, send isoelectric line
             tx.bit    = NONE;
             // Prepare for the future TX
             tx.idx    = 0;
-            txSamples = 0;
+            tx.smpls  = 0;
           }
           // Still sending the trail carrier, check the TX FIFO again
           else if (not txFIFO.empty()) {
