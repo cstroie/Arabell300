@@ -238,6 +238,8 @@ void txHandle() {
             // Disable TX and go offline
             tx.onair  = 0;
             tx.state  = OFFLINE;
+            // TX led off
+            PORTB &= ~_BV(PORTB1);
           }
           else if (tx.bits == CARR_BITS) {
             // After the last trail carrier bit, send isoelectric line
@@ -270,6 +272,8 @@ void checkSerial() {
       txFIFO.in(c);
       // Keep transmitting
       tx.onair = 1;
+      // TX led on
+      PORTB |= _BV(PORTB1);
     }
   }
 }
@@ -348,6 +352,9 @@ void setup() {
   // Configure resistor ladder DAC
   DDRD |= 0xF8;
 #endif
+
+  // Leds
+  DDRB |= _BV(PORTB1) | _BV(PORTB2);
 }
 
 /**
