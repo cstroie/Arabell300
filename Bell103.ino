@@ -50,6 +50,10 @@
 // Mark and space
 enum BIT {SPACE, MARK, NONE};
 
+// Serial flow control
+#define XON   0x13
+#define XOFF  0x11
+
 // Mark and space, TX and RX frequencies
 const uint16_t txSpce = 1070;  // 934uS  14953CPU
 const uint16_t txMark = 1270;  // 787uS  12598CPU
@@ -275,16 +279,27 @@ void txHandle() {
 }
 
 void checkSerial() {
+  static uint8_t isOff = 0;
   // Check any command on serial port
   uint8_t c = Serial.peek();
   if (c != 0xFF) {
     // There is data on serial port
     if (not txFIFO.full()) {
+      if (isOff) {
+        Serial.write(XON);
+        isOff = 0;
+      }
       // We can send the data
       c = Serial.read();
       txFIFO.in(c);
       // Keep TX'ing
       tx.onair = 1;
+    }
+    else {
+      if (not isOff) {
+        Serial.write(XOFF);
+        isOff = 1;
+      }
     }
   }
 }
