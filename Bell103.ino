@@ -18,13 +18,10 @@
 
   Bell 103:
     300 baud
+    8 data bits
     1 bit start
     1 bit stop
     0 parity bits
-    8 data bits
-    bit length: 3.33ms
-
-
 */
 
 #include "fifo.h"
@@ -141,19 +138,7 @@ inline uint8_t wvSample(uint8_t idx) {
 }
 
 /**
-  Send char array
-*/
-uint8_t txSend(char* chr, size_t len) {
-  tx.onair = 1;
-  //tx.state = OFFLINE;
-  for (uint8_t i = 0; i < len; i++) {
-    txFIFO.in(chr[i]);
-  }
-  //while (true) txHandle();
-}
-
-/**
-  Send the sample to DAC
+  Send the sample to the DAC
 
   @param sample the sample to output to DAC
 */
@@ -172,7 +157,7 @@ inline void txDAC(uint8_t sample) {
 }
 
 /**
-  TX workhorse.  This function is called by IRS for each output sample.
+  TX workhorse.  This function is called by ISR for each output sample.
   Immediately after starting, it gets the sample value and sends it to DAC.
 */
 void txHandle() {
@@ -283,15 +268,15 @@ void txHandle() {
 }
 
 void checkSerial() {
-  // Check any command on serial port
+  // Check any data on serial port
   uint8_t c = Serial.peek();
   if (c != 0xFF) {
     // There is data on serial port
     if (not txFIFO.full()) {
-      // We can send the data
+      // FIFO not full, we can send the data
       c = Serial.read();
       txFIFO.in(c);
-      // Keep TX'ing
+      // Keep transmitting
       tx.onair = 1;
     }
   }
