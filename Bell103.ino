@@ -29,15 +29,24 @@
 
 #include "fifo.h"
 
+// Use the PWM DAC (8 bits, one output PIN, uses Timer2) or
+// the resistor ladder (4 bits, 4 PINS)
+#define PWM_DAC
+
+// The PWM pin may be 3 or 11 (Timer2)
+#define PWM_PIN 3
+
+// CPU frequency correction for sampling timer
+#define F_COR (-120000L)
 
 // Sampling frequency
-#define FRQ_SAMPLE  9600
-#define BAUD        300
-#define DATABITS    8
-#define STARTBITS   1
-#define STOPBITS    1
+#define F_SAMPLE  9600
+#define BAUD      300
+#define DATABITS  8
+#define STARTBITS 1
+#define STOPBITS  1
 // Mark and space
-enum TX_BIT {SPACE, MARK, NONE};
+enum BIT {SPACE, MARK, NONE};
 
 // Mark and space, TX and RX frequencies
 const uint16_t txSpce = 1070;  // 934uS  14953CPU
@@ -45,48 +54,57 @@ const uint16_t txMark = 1270;  // 787uS  12598CPU
 const uint16_t rxSpce = 2025;  // 493uS   7901CPU
 const uint16_t rxMark = 2225;  // 449uS   7191CPU
 
-// Here are only the first quarter wave points
-const uint8_t wvForm[] = {0x80, 0x83, 0x86, 0x89, 0x8c, 0x8f, 0x92, 0x95,
-                          0x98, 0x9b, 0x9e, 0xa2, 0xa5, 0xa7, 0xaa, 0xad,
-                          0xb0, 0xb3, 0xb6, 0xb9, 0xbc, 0xbe, 0xc1, 0xc4,
-                          0xc6, 0xc9, 0xcb, 0xce, 0xd0, 0xd3, 0xd5, 0xd7,
-                          0xda, 0xdc, 0xde, 0xe0, 0xe2, 0xe4, 0xe6, 0xe8,
-                          0xea, 0xeb, 0xed, 0xee, 0xf0, 0xf1, 0xf3, 0xf4,
-                          0xf5, 0xf6, 0xf8, 0xf9, 0xfa, 0xfa, 0xfb, 0xfc,
-                          0xfd, 0xfd, 0xfe, 0xfe, 0xfe, 0xff, 0xff, 0xff
-                         };
-// Count wavepoints quarter, half and full
-const uint8_t   wvPtsQart = sizeof(wvForm) / sizeof(*wvForm);
-const uint8_t   wvPtsHalf = 2 * wvPtsQart;
-const uint16_t  wvPtsFull = 2 * wvPtsHalf;
-// Wave index steps
-const uint8_t wvStep[] = {(wvPtsFull * (uint32_t)txSpce + FRQ_SAMPLE / 2) / FRQ_SAMPLE, // 29
-                          (wvPtsFull * (uint32_t)txMark + FRQ_SAMPLE / 2) / FRQ_SAMPLE, // 34
-                          0
-                         };
-const uint8_t txMaxSamples = FRQ_SAMPLE / BAUD; // Number of samples to send for each serial bit
-uint8_t txCountSamples = 0;        // Samples counter for each serial bit
+// Here are only the first quarter wave samples
+const uint8_t wvSmpl[] = {
+  0x80, 0x83, 0x86, 0x89, 0x8c, 0x8f, 0x92, 0x95,
+  0x98, 0x9b, 0x9e, 0xa2, 0xa5, 0xa7, 0xaa, 0xad,
+  0xb0, 0xb3, 0xb6, 0xb9, 0xbc, 0xbe, 0xc1, 0xc4,
+  0xc6, 0xc9, 0xcb, 0xce, 0xd0, 0xd3, 0xd5, 0xd7,
+  0xda, 0xdc, 0xde, 0xe0, 0xe2, 0xe4, 0xe6, 0xe8,
+  0xea, 0xeb, 0xed, 0xee, 0xf0, 0xf1, 0xf3, 0xf4,
+  0xf5, 0xf6, 0xf8, 0xf9, 0xfa, 0xfa, 0xfb, 0xfc,
+  0xfd, 0xfd, 0xfe, 0xfe, 0xfe, 0xff, 0xff, 0xff
+};
 
-enum TX_STATE {HEADCARR, STARTBIT, DATABIT, STOPBIT, TAILCARR, OFFCARR};
+// Count samples for quarter, half and full wave
+const uint8_t   wvPtsQart = sizeof(wvSmpl) / sizeof(*wvSmpl);
+const uint8_t   wvPtsHalf = wvPtsQart + wvPtsQart;
+const uint16_t  wvPtsFull = wvPtsHalf + wvPtsHalf;
 
-// Keep track if we are sending the start (1) or
-// stop bit (3), the data bits (2) or nothing (0)
-uint8_t txState = OFFCARR;
-uint8_t txOn = 0;
-uint8_t txData;
-// Momentary TX index
-uint8_t txIdx = 0;
-// Keep track of what we are TX'ing now
-uint8_t txIdxStep;
-uint8_t txBit = NONE;
-uint8_t txBitCount;
+// Wave index steps for SPACE, MARK and NONE bits
+const uint8_t wvStep[] = {
+  (wvPtsFull * (uint32_t)txSpce + F_SAMPLE / 2) / F_SAMPLE,
+  (wvPtsFull * (uint32_t)txMark + F_SAMPLE / 2) / F_SAMPLE,
+  0
+};
 
-uint8_t txCarrierCount  = 0;
-uint8_t txCarrierMax    = 240;  // 800ms
+// Number of samples for each serial bit
+const uint8_t txSamplesMax  = F_SAMPLE / BAUD;
+// Samples counter for each serial bit
+uint8_t       txSamples     = 0;
 
+// Number of maximum carrier bits in preamble and trail
+const uint8_t txCarrierMax  = 240;  // 800ms
+// Carrier bits counter in preamble and trail
+uint8_t       txCarrierBits = 0;
+
+
+// States in TX state machine
+enum TX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, OFFLINE};
+
+// Transmission related data
+struct TX_t {
+  uint8_t onair = 0;        // TX enabled or disabled
+  uint8_t state = OFFLINE;  // TX state (TX_STATE enum)
+  uint8_t data  = 0;        // currently transmitting byte
+  uint8_t bit   = NONE;     // currently transmitting bit
+  uint8_t bits  = 0;        // already transmitted bits
+  uint8_t idx   = 0;        // wave samples index (start with first sample)
+  uint8_t step  = 0;        // wave samples increment step
+} tx;
 
 // FIFO
-FIFO txFIFO(5);
+FIFO txFIFO(6);
 
 
 /**
@@ -102,9 +120,9 @@ uint8_t lerp(uint8_t v0, uint8_t v1, uint8_t t) {
 }
 
 /**
-  Output an instant wave value
+  Get an instant wave sample
 
-  @param t the wave phase (0..255)
+  @param idx the wave index (0..wvPtsFull-1)
 */
 inline uint8_t wvSample(uint8_t idx) {
   // Work on half wave
@@ -114,7 +132,7 @@ inline uint8_t wvSample(uint8_t idx) {
     // Descending slope
     hIdx = wvPtsHalf - hIdx - 1;
   // Get the value
-  uint8_t result = wvForm[hIdx];
+  uint8_t result = wvSmpl[hIdx];
   // Check if in second half wave
   if (idx >= wvPtsHalf)
     // Under X axis
@@ -126,146 +144,142 @@ inline uint8_t wvSample(uint8_t idx) {
   Send char array
 */
 uint8_t txSend(char* chr, size_t len) {
-  txOn = 1;
-  //txState = OFFCARR;
+  tx.onair = 1;
+  //tx.state = OFFLINE;
   for (uint8_t i = 0; i < len; i++) {
     txFIFO.in(chr[i]);
   }
-  //while (true) wvOut();
+  //while (true) txHandle();
 }
 
-uint8_t wvOut() {
+/**
+  Send the sample to DAC
+
+  @param sample the sample to output to DAC
+*/
+inline void txDAC(uint8_t sample) {
+#ifdef PWM_DAC
+  // Use the 8-bit PWM DAC
+#if PWM_PIN == 11
+  OCR2A = sample;
+#else
+  OCR2B = sample;
+#endif //PWM_PIN
+#else
+  // Use the 4-bit resistor ladder DAC
+  PORTD = (sample & 0xF0) | _BV(3);
+#endif //PWM_DAC
+}
+
+/**
+  TX workhorse.  This function is called by IRS for each output sample.
+  Immediately after starting, it gets the sample value and sends it to DAC.
+*/
+void txHandle() {
   // First thing first: get the sample
-  uint8_t result = wvSample(txIdx);
+  uint8_t sample = wvSample(tx.idx);
 
-  // Check if we are TX'ing
-  if (txOn > 0) {
+  // Check if we are transmitting
+  if (tx.onair > 0) {
     // Output the sample
-    //PORTD = (result & 0xF0) | _BV(3);
-    //OCR2A = result;
-    OCR2B = result;
-
-    //Serial.print(txBit * 100);
-    //Serial.print(" ");
-    //Serial.print(txCountSamples);
-    //Serial.print(" ");
-    //Serial.print(txState * 100);
-    //Serial.print(" ");
-    //Serial.println(result);
-
-    //Serial.print((result >> 4) & 0x0F, 16);
-    //Serial.print(result & 0x0F, 16);
-
+    txDAC(sample);
+    // Step up the index for the next sample
+    tx.idx += wvStep[tx.bit];
 
     // Check if we have sent all samples for a bit.
-    if (txCountSamples >= txMaxSamples) {
+    if (txSamples++ >= txSamplesMax) {
       // Reset the samples counter
-      txCountSamples = 0;
+      txSamples = 0;
 
       // One bit finished, check the state and choose the next bit and state
-      switch (txState) {
-
-        // We have been off, prepare the transmission
-        case OFFCARR:
-          txState = HEADCARR;
-          txBit = MARK;
-          txCarrierCount = 0;
-          txIdx = 0;
+      switch (tx.state) {
+        // We have been offline, prepare the transmission
+        case OFFLINE:
+          tx.state  = PREAMBLE;
+          tx.bit    = MARK;
+          tx.idx    = 0;
+          txCarrierBits = 0;
+          // Get data from FIFO, if any
           if (not txFIFO.empty())
-            txData = txFIFO.out();
+            tx.data = txFIFO.out();
           break;
 
-        // We are sending the head carrier
-        case HEADCARR:
+        // We are sending the preamble carrier
+        case PREAMBLE:
           // Check if we have sent the carrier long enough
-          if (++txCarrierCount >= txCarrierMax) {
+          if (++txCarrierBits >= txCarrierMax) {
             // Carrier sent, go to the start bit
-            txState = STARTBIT;
-            txBit = SPACE;
+            tx.state  = START_BIT;
+            tx.bit    = SPACE;
           }
           break;
 
-        // We have sent the start bit, go on with data bits
-        case STARTBIT:
-          txState = DATABIT;
-          txBitCount = 0;
-          // LSB first
-          txBit = txData & 0x01;
-          txData = txData >> 1;
+        // We have sent the start bit, go on with data bits, LSB first
+        case START_BIT:
+          tx.state  = DATA_BIT;
+          tx.bit    = tx.data & 0x01;
+          tx.data   = tx.data >> 1;
+          tx.bits   = 0;
           break;
 
-        // We are sending the data bits, count them
-        case DATABIT:
+        // We are sending the data bits, keep sending until MSB
+        case DATA_BIT:
           // Check if we have sent all the bits
-          if (++txBitCount < DATABITS) {
+          if (++tx.bits < DATABITS) {
             // Keep sending the data bits, LSB to MSB
-            txBit = txData & 0x01;
-            txData = txData >> 1;
+            tx.bit  = tx.data & 0x01;
+            tx.data = tx.data >> 1;
           }
           else {
-            // We have sent all the data bits, send the stop bit
-            txState = STOPBIT;
-            txBit = MARK;
+            // We have sent all the data bits, go on with the stop bit
+            tx.state  = STOP_BIT;
+            tx.bit    = MARK;
           }
           break;
 
-        // We have sent the stop bit, try to get the next byte
-        case STOPBIT:
+        // We have sent the stop bit, try to get the next byte, if any
+        case STOP_BIT:
           // Check the TX FIFO
           if (txFIFO.empty()) {
-            // No more data to send, go on with the tail carrier
-            txState = TAILCARR;
-            txBit = MARK;
-            txCarrierCount = 0;
+            // No more data to send, go on with the trail carrier
+            tx.state  = TRAIL;
+            tx.bit    = MARK;
+            txCarrierBits = 0;
           }
           else {
-            // There is more data, get it and return to the start bit
-            txState = STARTBIT;
-            txBit = SPACE;
-            txData = txFIFO.out();
-            //Serial.println();
+            // There is still data, get one byte and return to the start bit
+            tx.state  = START_BIT;
+            tx.bit    = SPACE;
+            tx.data   = txFIFO.out();
           }
           break;
 
-        // We are sending the tail carrier
-        case TAILCARR:
-          // Check if we have sent the carrier long enough
-          if (++txCarrierCount > txCarrierMax) {
-            // Disable TX
-            txOn = 0;
-            txState = OFFCARR;
+        // We are sending the trail carrier
+        case TRAIL:
+          // Check if we have sent the trail carrier long enough
+          if (++txCarrierBits > txCarrierMax) {
+            // Disable TX and go offline
+            tx.onair  = 0;
+            tx.state  = OFFLINE;
           }
-          else if (txCarrierCount == txCarrierMax) {
-            // After the last tail carrier bit, send isoelectric line
-            txBit = NONE;
-            // Prepare for the next TX
-            txIdx = 0;
-            txCountSamples = 0;
+          else if (txCarrierBits == txCarrierMax) {
+            // After the last trail carrier bit, send isoelectric line
+            tx.bit    = NONE;
+            // Prepare for the future TX
+            tx.idx    = 0;
+            txSamples = 0;
           }
-          // Check the TX FIFO again...
+          // Still sending the trail carrier, check the TX FIFO again
           else if (not txFIFO.empty()) {
             // There is new data in FIFO, start over
-            txState = STARTBIT;
-            txBit = SPACE;
-            txData = txFIFO.out();
+            tx.state  = START_BIT;
+            tx.bit    = SPACE;
+            tx.data   = txFIFO.out();
           }
           break;
       }
-
-      // Check if we switched the bit
-      if (txIdxStep != wvStep[txBit]) {
-        // Use the step of the new bit
-        txIdxStep = wvStep[txBit];
-        // Reset the samples counter
-        txCountSamples = 0;
-      }
     }
-
-    // Increase the index and counter for next sample
-    txIdx += txIdxStep;
-    txCountSamples++;
   }
-  //return result;
 }
 
 void checkSerial() {
@@ -278,7 +292,7 @@ void checkSerial() {
       c = Serial.read();
       txFIFO.in(c);
       // Keep TX'ing
-      txOn = 1;
+      tx.onair = 1;
     }
   }
 }
@@ -286,7 +300,7 @@ void checkSerial() {
 // ADC Interrupt vector
 ISR(ADC_vect) {
   TIFR1 = _BV(ICF1);
-  wvOut();
+  txHandle();
 }
 
 /**
@@ -299,11 +313,12 @@ void setup() {
   TCCR1A = 0;
   TCCR1B = _BV(CS10) | _BV(WGM13) | _BV(WGM12);
   // Top set for 9600 baud
-  ICR1 = ((F_CPU - 120000L) / FRQ_SAMPLE) - 1;
+  ICR1 = ((F_CPU + F_COR) / F_SAMPLE) - 1;
 
   // Vcc with external capacitor at AREF pin, ADC Left Adjust Result
   ADMUX = _BV(REFS0) | _BV(ADLAR);
 
+  // Analog input A0
   // Port C Data Direction Register
   DDRC  &= ~_BV(0);
   // Port C Data Register
@@ -317,13 +332,9 @@ void setup() {
   // ADC Interrupt Enable, ADC Prescaler 16
   ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADATE) | _BV(ADIE) | _BV(ADPS2);
 
-  // DAC init
-  //DDRD |= 0xF8;
 
-
-  // Set up Timer 2 to do pulse width modulation on the speaker pin.
-
-  pinMode(3, OUTPUT);
+#ifdef PWM_DAC
+  // Set up Timer 2 to do pulse width modulation on the PWM PIN
   // Use internal clock (datasheet p.160)
   ASSR &= ~(_BV(EXCLK) | _BV(AS2));
 
@@ -331,25 +342,35 @@ void setup() {
   TCCR2A |= _BV(WGM21) | _BV(WGM20);
   TCCR2B &= ~_BV(WGM22);
 
-  /*
-    // Do non-inverting PWM on pin OC2A (p.155)
-    // On the Arduino this is pin 11.
-    TCCR2A = (TCCR2A | _BV(COM2A1)) & ~_BV(COM2A0);
-    TCCR2A &= ~(_BV(COM2B1) | _BV(COM2B0));
-    // No prescaler (p.158)
-    TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
-
-    // Set initial pulse width to the first sample.
-    OCR2A = 128;
-  */
+#if PWM_PIN == 11
+  // Configure the PWM PIN 11 (PB3)
+  PORTB &= ~(_BV(PORTB3));
+  DDRD  |= _BV(PORTD3);
+  // Do non-inverting PWM on pin OC2A (p.155)
+  // On the Arduino this is pin 11.
+  TCCR2A = (TCCR2A | _BV(COM2A1)) & ~_BV(COM2A0);
+  TCCR2A &= ~(_BV(COM2B1) | _BV(COM2B0));
+  // No prescaler (p.158)
+  TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
+  // Set initial pulse width to the first sample.
+  OCR2A  = wvSmpl[0];
+#else
+  // Configure the PWM PIN 3 (PD3)
+  PORTD &= ~(_BV(PORTD3));
+  DDRD  |= _BV(PORTD3);
   // Do non-inverting PWM on pin OC2B (p.155)
   // On the Arduino this is pin 3.
   TCCR2A = (TCCR2A | _BV(COM2B1)) & ~_BV(COM2B0);
   TCCR2A &= ~(_BV(COM2A1) | _BV(COM2A0));
   // No prescaler (p.158)
   TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
-
-  OCR2B = 128;
+  // Set initial pulse width to the first sample.
+  OCR2B  = wvSmpl[0];
+#endif // PWM_PIN
+#else
+  // Configure resistor ladder DAC
+  DDRD |= 0xF8;
+#endif
 }
 
 /**
