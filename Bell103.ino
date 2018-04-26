@@ -73,15 +73,15 @@ const uint8_t   wvPtsHalf = wvPtsQart + wvPtsQart;
 const uint16_t  wvPtsFull = wvPtsHalf + wvPtsHalf;
 
 // Wave index steps for SPACE, MARK and NONE bits
-const uint8_t wvStep[] = {
-  (wvPtsFull * (uint32_t)txSpce + F_SAMPLE / 2) / F_SAMPLE,
-  (wvPtsFull * (uint32_t)txMark + F_SAMPLE / 2) / F_SAMPLE,
+const uint8_t wvStepTX[] = {
+  (wvPtsFull * (uint32_t)txSpce + F_SAMPLE / 2) / F_SAMPLE, // 29
+  (wvPtsFull * (uint32_t)txMark + F_SAMPLE / 2) / F_SAMPLE, // 34
   0
 };
 
 const uint8_t wvStepRX[] = {
-  (wvPtsFull * (uint32_t)rxSpce + F_SAMPLE / 2) / F_SAMPLE,
-  (wvPtsFull * (uint32_t)rxMark + F_SAMPLE / 2) / F_SAMPLE,
+  (wvPtsFull * (uint32_t)rxSpce + F_SAMPLE / 2) / F_SAMPLE, // 54
+  (wvPtsFull * (uint32_t)rxMark + F_SAMPLE / 2) / F_SAMPLE, // 59
   0
 };
 
@@ -176,7 +176,7 @@ void txHandle() {
     // Output the sample
     txDAC(sample);
     // Step up the index for the next sample
-    tx.idx += wvStep[tx.bit];
+    tx.idx += wvStepTX[tx.bit];
 
     // Check if we have sent all samples for a bit.
     if (tx.smpls++ >= BIT_SAMPLES) {
@@ -276,10 +276,7 @@ void txHandle() {
   }
 }
 
-uint8_t rxHandle() {
-  // Get the sample
-  int8_t sample = ADCH - 128;
-
+uint8_t rxHandle(int8_t sample) {
   int8_t x, y;
   static uint16_t phSpce, phMark;
 
@@ -320,7 +317,8 @@ uint8_t rxHandle() {
 
   rx.bits >>= 1;
   rx.bits |= ((pwMark > pwSpce) ? 0x80 : 0x00);
-  //Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
+
+  Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
 }
 
 void checkSerial() {
@@ -344,7 +342,7 @@ void checkSerial() {
 ISR(ADC_vect) {
   TIFR1 = _BV(ICF1);
   txHandle();
-  rxHandle();
+  rxHandle(ADCH - 128);
 }
 
 /**
@@ -424,18 +422,13 @@ void setup() {
   Main Arduino loop
 */
 void loop() {
-  static uint8_t rxIdx = 0;
 
   checkSerial();
 
   /*
-    //rxHandle(ADCH);
-    rxHandle(wvSample(rxIdx) - 128);
-    rxIdx += wvStepRX[1];
-
-    //Serial.print(rxFIFO.out());
-    Serial.print(get_power_reading());
-    Serial.println();
+    // Simulation
+    static uint8_t rxIdx = 0;
+    rxHandle((wvSample(rxIdx) - 128) / 2);
+    rxIdx += wvStepRX[SPACE];
   */
-
 }
