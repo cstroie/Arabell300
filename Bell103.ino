@@ -318,7 +318,7 @@ uint8_t rxHandle(int8_t sample) {
   rx.bits >>= 1;
   rx.bits |= ((pwMark > pwSpce) ? 0x80 : 0x00);
 
-  Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
+  //Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
 }
 
 void checkSerial() {
@@ -431,4 +431,10 @@ void loop() {
     rxHandle((wvSample(rxIdx) - 128) / 2);
     rxIdx += wvStepRX[SPACE];
   */
+
+  static uint32_t next = millis();
+  if (millis() > next) {
+    Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
+    next += 100;
+  }
 }
