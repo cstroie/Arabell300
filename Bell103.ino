@@ -24,6 +24,8 @@
     0 parity bits
 */
 
+#include <util/atomic.h>
+
 #include "fifo.h"
 
 // Use the PWM DAC (8 bits, one output PIN, uses Timer2) or
@@ -77,8 +79,26 @@ const uint8_t wvStep[] = {
   0
 };
 
+const uint8_t wvStepRX[] = {
+  (wvPtsFull * (uint32_t)rxSpce + F_SAMPLE / 2) / F_SAMPLE,
+  (wvPtsFull * (uint32_t)rxMark + F_SAMPLE / 2) / F_SAMPLE,
+  0
+};
+
 // States in TX state machine
 enum TX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, OFFLINE};
+
+// Phase increments for SPACE and MARK in RX
+const long phSpceInc = round((1L << 16) * rxSpce / F_SAMPLE);   // 13824
+const long phMarkInc = round((1L << 16) * rxMark / F_SAMPLE);   // 15189
+const int  logTau    = 6;                                       // tau = 64 / SAMPLING_FREQ = 6.666 ms
+
+// Demodulated (I, Q) amplitudes for SPACE and Mark
+volatile int16_t rxSpceI, rxSpceQ, rxMarkI, rxMarkQ;
+
+// Power for SPACE and Mark
+uint16_t pwSpce, pwMark;
+
 
 // Transmission related data
 struct TX_t {
@@ -92,8 +112,15 @@ struct TX_t {
   uint8_t smpls = 0;        // samples counter for each bit
 } tx;
 
-// FIFO
+// Receiving and decoding related data
+struct RX_t {
+  uint8_t bits; // Bits sampled by the demodulator (at ADC speed)
+  uint8_t data; // Actual found bits at correct bitrate
+} rx;
+
+// FIFOs
 FIFO txFIFO(6);
+FIFO rxFIFO(6);
 
 
 /**
@@ -261,6 +288,53 @@ void txHandle() {
   }
 }
 
+uint8_t rxHandle() {
+  // Get the sample
+  int8_t sample = ADCH - 128;
+
+  int8_t x, y;
+  static uint16_t phSpce, phMark;
+
+  // Update the phase of the local oscillator for SPACE
+  phSpce += phSpceInc;
+  // Multiply the sample by square waves in quadrature
+  x = sample;
+  if (((phSpce >> 8) + 0x00) & 0x80)
+    x = -1 - x;
+  y = sample;
+  if (((phSpce >> 8) + 0x40) & 0x80)
+    y = -1 - y;
+  // First order low-pass filter.
+  rxSpceI += x - (rxSpceI >> logTau);
+  rxSpceQ += y - (rxSpceQ >> logTau);
+
+  // Update the phase of the local oscillator for MARK
+  phMark += phMarkInc;
+  // Multiply the sample by square waves in quadrature
+  x = sample;
+  if (((phMark >> 8) + 0x00) & 0x80)
+    x = -1 - x;
+  y = sample;
+  if (((phMark >> 8) + 0x40) & 0x80)
+    y = -1 - y;
+  // First order low-pass filter.
+  rxMarkI += x - (rxMarkI >> logTau);
+  rxMarkQ += y - (rxMarkQ >> logTau);
+
+  // Compute power
+  int16_t I, Q;
+  I = rxSpceI >> logTau;
+  Q = rxSpceQ >> logTau;
+  pwSpce = I * I + Q * Q;
+  I = rxMarkI >> logTau;
+  Q = rxMarkQ >> logTau;
+  pwMark = I * I + Q * Q;
+
+  rx.bits >>= 1;
+  rx.bits |= ((pwMark > pwSpce) ? 0x80 : 0x00);
+  //Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
+}
+
 void checkSerial() {
   // Check any data on serial port
   uint8_t c = Serial.peek();
@@ -282,6 +356,7 @@ void checkSerial() {
 ISR(ADC_vect) {
   TIFR1 = _BV(ICF1);
   txHandle();
+  rxHandle();
 }
 
 /**
@@ -361,5 +436,18 @@ void setup() {
   Main Arduino loop
 */
 void loop() {
+  static uint8_t rxIdx = 0;
+
   checkSerial();
+
+  /*
+    //rxHandle(ADCH);
+    rxHandle(wvSample(rxIdx) - 128);
+    rxIdx += wvStepRX[1];
+
+    //Serial.print(rxFIFO.out());
+    Serial.print(get_power_reading());
+    Serial.println();
+  */
+
 }
