@@ -89,9 +89,9 @@ const uint8_t wvStepRX[] = {
 enum TX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, OFFLINE};
 
 // Phase increments for SPACE and MARK in RX
-const long phSpceInc = round((1L << 16) * rxSpce / F_SAMPLE);   // 13824
-const long phMarkInc = round((1L << 16) * rxMark / F_SAMPLE);   // 15189
-const int  logTau    = 6;                                       // tau = 64 / SAMPLING_FREQ = 6.666 ms
+const int32_t phSpceInc = (1L << 16) * rxSpce / F_SAMPLE;   // 13824
+const int32_t phMarkInc = (1L << 16) * rxMark / F_SAMPLE;   // 15189
+const uint8_t logTau    = 6;                                       // tau = 64 / SAMPLING_FREQ = 6.666 ms
 
 // Demodulated (I, Q) amplitudes for SPACE and Mark
 volatile int16_t rxSpceI, rxSpceQ, rxMarkI, rxMarkQ;
@@ -122,18 +122,6 @@ struct RX_t {
 FIFO txFIFO(6);
 FIFO rxFIFO(6);
 
-
-/**
-  Linear interpolation
-
-  @param v0 previous value (8 bits)
-  @param v1 next value     (8 bits)
-  @param t                 (4 bits)
-  @result interpolated value
-*/
-uint8_t lerp(uint8_t v0, uint8_t v1, uint8_t t) {
-  return ((int16_t)v0 * (0x10 - t) + (int16_t)v1 * t) >> 4;
-}
 
 /**
   Get an instant wave sample
@@ -325,10 +313,10 @@ uint8_t rxHandle() {
   int16_t I, Q;
   I = rxSpceI >> logTau;
   Q = rxSpceQ >> logTau;
-  pwSpce = I * I + Q * Q;
+  pwSpce = (int8_t)I * (int8_t)I + (int8_t)Q * (int8_t)Q;
   I = rxMarkI >> logTau;
   Q = rxMarkQ >> logTau;
-  pwMark = I * I + Q * Q;
+  pwMark = (int8_t)I * (int8_t)I + (int8_t)Q * (int8_t)Q;
 
   rx.bits >>= 1;
   rx.bits |= ((pwMark > pwSpce) ? 0x80 : 0x00);
