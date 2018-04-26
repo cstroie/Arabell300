@@ -98,3 +98,16 @@ uint8_t FIFO::out() {
   }
   return result;
 }
+
+
+uint8_t FIFO::_peek() {
+  return buf[i_out];
+}
+
+uint8_t FIFO::peek() {
+  uint8_t result;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    result = this->_peek();
+  }
+  return result;
+}

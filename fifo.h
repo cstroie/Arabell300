@@ -31,6 +31,7 @@ class FIFO {
     uint8_t len();
     uint8_t in(uint8_t x);
     uint8_t out();
+    uint8_t peek();
 
   private:
     uint8_t* buf;
@@ -45,6 +46,7 @@ class FIFO {
     uint8_t _len();
     uint8_t _in(uint8_t x);
     uint8_t _out();
+    uint8_t _peek();
 };
 
 #endif /* FIFO_H */
