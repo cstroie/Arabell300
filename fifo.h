@@ -37,8 +37,14 @@ class FIFO {
     uint8_t _bitsize;
     uint8_t _size;
     uint8_t _mask;
-    uint8_t _in;
-    uint8_t _out;
+    uint8_t i_in;
+    uint8_t i_out;
+
+    uint8_t _full();
+    uint8_t _empty();
+    uint8_t _len();
+    uint8_t _in(uint8_t x);
+    uint8_t _out();
 };
 
 #endif /* FIFO_H */

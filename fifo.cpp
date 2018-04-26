@@ -17,6 +17,8 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <stddef.h>
+#include <util/atomic.h>
 #include "fifo.h"
 
 FIFO::FIFO(uint8_t bitsize): _bitsize(bitsize) {
@@ -29,30 +31,70 @@ FIFO::~FIFO() {
   free(buf);
 }
 
+uint8_t FIFO::_full() {
+  return ((i_out > i_in) ? (i_out - i_in == 1) : (i_out - i_in + _size == 1));
+}
+
 uint8_t FIFO::full() {
-  return (_out > _in) ? (_out - _in == 1) : (_out - _in + _size == 1);
+  uint8_t result;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    result = this->_full();
+  }
+  return result;
+}
+
+uint8_t FIFO::_empty() {
+  return (i_in == i_out);
 }
 
 uint8_t FIFO::empty() {
-  return _in == _out;
+  uint8_t result;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    result = this->_empty();
+  }
+  return result;
+}
+
+uint8_t FIFO::_len() {
+  return ((i_in < i_out) ? (_size + i_in - i_out) : (i_in - i_out));
 }
 
 uint8_t FIFO::len() {
-  return (_in < _out) ? (_size + _in - _out) : (_in - _out);
+  uint8_t result;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    result = this->_len();
+  }
+  return result;
+}
+
+uint8_t FIFO::_in(uint8_t x) {
+  if (not this->_full()) {
+    buf[i_in] = x;
+    i_in = (i_in + 1) & _mask;
+  }
 }
 
 uint8_t FIFO::in(uint8_t x) {
-  if (not this->full()) {
-    buf[_in] = x;
-    _in = (_in + 1) & _mask;
+  uint8_t result;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    result = this->_in(x);
   }
+  return result;
+}
+
+uint8_t FIFO::_out() {
+  uint8_t x = 0;
+  if (i_in != i_out) {
+    x = buf[i_out];
+    i_out = (i_out + 1) & _mask;
+  }
+  return x;
 }
 
 uint8_t FIFO::out() {
-  uint8_t x = 0;
-  if (_in != _out) {
-    x = buf[_out];
-    _out = (_out + 1) & _mask;
+  uint8_t result;
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    result = this->_out();
   }
-  return x;
+  return result;
 }
