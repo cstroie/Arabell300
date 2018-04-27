@@ -35,6 +35,9 @@
 // The PWM pin may be 3 or 11 (Timer2)
 #define PWM_PIN 3
 
+// Minimal power of the receiving signals (arbitrary value)
+#define MIN_PWR 100
+
 // CPU frequency correction for sampling timer
 #define F_COR (-120000L)
 
@@ -72,26 +75,27 @@ const uint8_t   wvPtsQart = sizeof(wvSmpl) / sizeof(*wvSmpl);
 const uint8_t   wvPtsHalf = wvPtsQart + wvPtsQart;
 const uint16_t  wvPtsFull = wvPtsHalf + wvPtsHalf;
 
-// Wave index steps for SPACE, MARK and NONE bits
+// Wave index steps for SPACE, MARK and NONE bits in TX
 const uint8_t wvStepTX[] = {
   (wvPtsFull * (uint32_t)txSpce + F_SAMPLE / 2) / F_SAMPLE, // 29
   (wvPtsFull * (uint32_t)txMark + F_SAMPLE / 2) / F_SAMPLE, // 34
   0
 };
 
+// Wave index steps for SPACE, MARK and NONE bits in RX
 const uint8_t wvStepRX[] = {
   (wvPtsFull * (uint32_t)rxSpce + F_SAMPLE / 2) / F_SAMPLE, // 54
   (wvPtsFull * (uint32_t)rxMark + F_SAMPLE / 2) / F_SAMPLE, // 59
   0
 };
 
-// States in TX state machine
+// States in RX and TX finite states machines
 enum TXRX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, OFFLINE};
 
-// Phase increments for SPACE and MARK in RX
+// Phase increments for SPACE and MARK in RX (fixed point arithmetics)
 const int32_t phSpceInc = (1L << 16) * rxSpce / F_SAMPLE;   // 13824
 const int32_t phMarkInc = (1L << 16) * rxMark / F_SAMPLE;   // 15189
-const uint8_t logTau    = 6;                                       // tau = 64 / SAMPLING_FREQ = 6.666 ms
+const uint8_t logTau    = 6;                                // tau = 64 / SAMPLING_FREQ = 6.666 ms
 
 // Demodulated (I, Q) amplitudes for SPACE and Mark
 volatile int16_t rxSpceI, rxSpceQ, rxMarkI, rxMarkQ;
@@ -102,25 +106,24 @@ uint16_t pwSpce, pwMark;
 
 // Transmission related data
 struct TX_t {
-  uint8_t onair = 0;        // TX enabled or disabled
-  uint8_t state = OFFLINE;  // TX state (TXRX_STATE enum)
-  uint8_t data  = 0;        // currently transmitting byte
-  uint8_t bit   = NONE;     // currently transmitting bit
-  uint8_t bits  = 0;        // counter of already transmitted bits
-  uint8_t idx   = 0;        // wave samples index (start with first sample)
-  uint8_t step  = 0;        // wave samples increment step
-  uint8_t smpls = 0;        // samples counter for each bit
+  uint8_t active  = 0;        // currently transmitting or not
+  uint8_t state   = OFFLINE;  // TX state (TXRX_STATE enum)
+  uint8_t dtbit   = NONE;     // currently transmitting data bit
+  uint8_t data    = 0;        // transmitting data bits, shift out, LSB first
+  uint8_t bits    = 0;        // counter of already transmitted bits
+  uint8_t idx     = 0;        // wave samples index (start with first sample)
+  uint8_t smpls   = 0;        // samples counter for each bit
 } tx;
 
 // Receiving and decoding related data
 struct RX_t {
-  uint8_t state = OFFLINE;  // RX decoder state (TXRX_STATE enum)
-  uint8_t bits   = 0; // counter of received bits
-  uint8_t data   = 0; // data bits
-  uint8_t stream = 0; // decoded samples (32 per data bit)
-  uint8_t bitsum = 0; // Sample bit sum for current phase
-  uint8_t smpls = 0;        // samples counter for each bit
-  uint8_t dcdbit   = NONE;     // currently decoded sample
+  uint8_t active  = 0;        // currently receiving proper signals or not
+  uint8_t state   = OFFLINE;  // RX decoder state (TXRX_STATE enum)
+  uint8_t data    = 0;        // the received data bits, shift in, LSB first
+  uint8_t bits    = 0;        // counter of received data bits
+  uint8_t stream  = 0;        // last 8 decoded bit samples
+  uint8_t bitsum  = 0;        // sum of the last decoded bit samples
+  uint8_t smpls   = 0;        // samples counter for each bit
 } rx;
 
 // FIFOs
@@ -177,13 +180,13 @@ void txHandle() {
   uint8_t sample = wvSample(tx.idx);
 
   // Check if we are transmitting
-  if (tx.onair > 0) {
+  if (tx.active > 0) {
     // Output the sample
     txDAC(sample);
     // Step up the index for the next sample
-    tx.idx += wvStepTX[tx.bit];
+    tx.idx += wvStepTX[tx.dtbit];
 
-    // Check if we have sent all samples for a bit.
+    // Check if we have sent all samples for a bit
     if (tx.smpls++ >= BIT_SAMPLES) {
       // Reset the samples counter
       tx.smpls  = 0;
@@ -193,7 +196,7 @@ void txHandle() {
         // We have been offline, prepare the transmission
         case OFFLINE:
           tx.state  = PREAMBLE;
-          tx.bit    = MARK;
+          tx.dtbit  = MARK;
           tx.idx    = 0;
           tx.bits   = 0;
           // Get data from FIFO, if any
@@ -207,14 +210,14 @@ void txHandle() {
           if (++tx.bits >= CARR_BITS) {
             // Carrier sent, go to the start bit
             tx.state  = START_BIT;
-            tx.bit    = SPACE;
+            tx.dtbit  = SPACE;
           }
           break;
 
         // We have sent the start bit, go on with data bits, LSB first
         case START_BIT:
           tx.state  = DATA_BIT;
-          tx.bit    = tx.data & 0x01;
+          tx.dtbit  = tx.data & 0x01;
           tx.data   = tx.data >> 1;
           tx.bits   = 0;
           break;
@@ -224,13 +227,13 @@ void txHandle() {
           // Check if we have sent all the bits
           if (++tx.bits < DATA_BITS) {
             // Keep sending the data bits, LSB to MSB
-            tx.bit  = tx.data & 0x01;
-            tx.data = tx.data >> 1;
+            tx.dtbit  = tx.data & 0x01;
+            tx.data   = tx.data >> 1;
           }
           else {
             // We have sent all the data bits, go on with the stop bit
             tx.state  = STOP_BIT;
-            tx.bit    = MARK;
+            tx.dtbit  = MARK;
           }
           break;
 
@@ -240,13 +243,13 @@ void txHandle() {
           if (txFIFO.empty()) {
             // No more data to send, go on with the trail carrier
             tx.state  = TRAIL;
-            tx.bit    = MARK;
+            tx.dtbit  = MARK;
             tx.bits   = 0;
           }
           else {
             // There is still data, get one byte and return to the start bit
             tx.state  = START_BIT;
-            tx.bit    = SPACE;
+            tx.dtbit  = SPACE;
             tx.data   = txFIFO.out();
           }
           break;
@@ -256,14 +259,14 @@ void txHandle() {
           // Check if we have sent the trail carrier long enough
           if (++tx.bits > CARR_BITS) {
             // Disable TX and go offline
-            tx.onair  = 0;
+            tx.active = 0;
             tx.state  = OFFLINE;
             // TX led off
-            PORTB &= ~_BV(PORTB1);
+            PORTB    &= ~_BV(PORTB1);
           }
           else if (tx.bits == CARR_BITS) {
             // After the last trail carrier bit, send isoelectric line
-            tx.bit    = NONE;
+            tx.dtbit  = NONE;
             // Prepare for the future TX
             tx.idx    = 0;
             tx.smpls  = 0;
@@ -272,7 +275,7 @@ void txHandle() {
           else if (not txFIFO.empty()) {
             // There is new data in FIFO, start over
             tx.state  = START_BIT;
-            tx.bit    = SPACE;
+            tx.dtbit  = SPACE;
             tx.data   = txFIFO.out();
           }
           break;
@@ -284,6 +287,7 @@ void txHandle() {
 uint8_t rxHandle(int8_t sample) {
   int8_t x, y;
   static uint16_t phSpce, phMark;
+  static uint8_t rxLed = 0;
 
   // Update the phase of the local oscillator for SPACE
   phSpce += phSpceInc;
@@ -320,13 +324,35 @@ uint8_t rxHandle(int8_t sample) {
   Q = rxMarkQ >> logTau;
   pwMark = (int8_t)I * (int8_t)I + (int8_t)Q * (int8_t)Q;
 
-  // Keep the decoded bit, bitsum and bit stream
-  rx.dcdbit = ((pwMark > pwSpce) ? MARK : SPACE);
-  rx.bitsum += rx.dcdbit;
-  rx.stream <<= 1;
-  rx.stream |= rx.dcdbit;
+  // Validate the RX tones
+  rx.active = (pwSpce >= MIN_PWR) or (pwMark >= MIN_PWR);
+  if (rx.active) {
+    // Call the decoder
+    rxDecoder(((pwMark > pwSpce) ? MARK : SPACE));
+    // RX led on
+    if (not rxLed) {
+      PORTB  |= _BV(PORTB2);
+      rxLed   = 1;
+    }
+  }
+  else {
+    // Disable the decoder and clear all partially received data
+    rx.state  = OFFLINE;
+    // RX led off
+    if (rxLed) {
+      PORTB  &= ~_BV(PORTB2);
+      rxLed   = 0;
+    }
+  }
+}
 
-  // Samples counter
+void rxDecoder(uint8_t deco_bit) {
+  // Keep the decoded bit, bitsum and bit stream (MSB first)
+  rx.bitsum += deco_bit;
+  rx.stream <<= 1;
+  rx.stream |= deco_bit;
+
+  // Count the received samples
   rx.smpls++;
 
   // Check the RX decoder state
@@ -424,7 +450,7 @@ void checkSerial() {
       c = Serial.read();
       txFIFO.in(c);
       // Keep transmitting
-      tx.onair = 1;
+      tx.active = 1;
       // TX led on
       PORTB |= _BV(PORTB1);
     }
