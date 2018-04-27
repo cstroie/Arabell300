@@ -16,12 +16,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-  Bell 103:
-    300 baud
-    8 data bits
-    1 bit start
-    1 bit stop
-    0 parity bits
+  Bell 103: 300 8N1
 */
 
 #include <util/atomic.h>
@@ -49,7 +44,8 @@
 #define STOP_BITS   1
 #define CARR_BITS   240
 #define BIT_SAMPLES (F_SAMPLE / BAUD)
-// Mark and space
+
+// Mark and space bits
 enum BIT {SPACE, MARK, NONE};
 
 // Mark and space, TX and RX frequencies
@@ -284,7 +280,15 @@ void txHandle() {
   }
 }
 
-uint8_t rxHandle(int8_t sample) {
+/**
+  RX workhorse.  This function is called by ISR for each input sample.
+  It computes the power of the two RX signals, validates them and
+  compared to each other to figure out the data bit.
+  Then, it sends the data bit to decoder.
+
+  @param sample the (signed) sample
+*/
+void rxHandle(int8_t sample) {
   int8_t x, y;
   static uint16_t phSpce, phMark;
   static uint8_t rxLed = 0;
@@ -346,6 +350,12 @@ uint8_t rxHandle(int8_t sample) {
   }
 }
 
+/**
+  The RX data decoder.  It gets the decoded data bit and tries to figure out
+  the entire received byte.
+
+  @param deco_bit the decoded data bit
+*/
 void rxDecoder(uint8_t deco_bit) {
   // Keep the decoded bit, bitsum and bit stream (MSB first)
   rx.bitsum += deco_bit;
@@ -440,7 +450,11 @@ void rxDecoder(uint8_t deco_bit) {
   }
 }
 
-void checkSerial() {
+/**
+  Check the serial I/O and send the data to TX, respectively check the
+  RX data and send it to serial.
+*/
+void serialHandle() {
   uint8_t c;
   // Check any data on serial port
   if (Serial.available() > 0) {
@@ -463,7 +477,10 @@ void checkSerial() {
   }
 }
 
-// ADC Interrupt vector
+/**
+  ADC Interrupt vector, called for each sample.
+  It calls both the TX and RX handlers.
+*/
 ISR(ADC_vect) {
   TIFR1 = _BV(ICF1);
   txHandle();
@@ -548,7 +565,7 @@ void setup() {
 */
 void loop() {
 
-  checkSerial();
+  serialHandle();
 
   /*
     // Simulation
