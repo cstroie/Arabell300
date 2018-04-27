@@ -31,7 +31,7 @@
 #define PWM_PIN 3
 
 // Minimal power of the receiving signals (arbitrary value)
-#define MIN_PWR 100
+#define MIN_PWR 1
 
 // CPU frequency correction for sampling timer
 #define F_COR (-120000L)
@@ -91,7 +91,7 @@ enum TXRX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, OFFLINE};
 // Phase increments for SPACE and MARK in RX (fixed point arithmetics)
 const int32_t phSpceInc = (1L << 16) * rxSpce / F_SAMPLE;   // 13824
 const int32_t phMarkInc = (1L << 16) * rxMark / F_SAMPLE;   // 15189
-const uint8_t logTau    = 6;                                // tau = 64 / SAMPLING_FREQ = 6.666 ms
+const uint8_t logTau    = 4;                                // tau = 64 / SAMPLING_FREQ = 6.666 ms
 
 // Demodulated (I, Q) amplitudes for SPACE and Mark
 volatile int16_t rxSpceI, rxSpceQ, rxMarkI, rxMarkQ;
@@ -335,7 +335,7 @@ void rxHandle(int8_t sample) {
     rxDecoder(((pwMark > pwSpce) ? MARK : SPACE));
     // RX led on
     if (not rxLed) {
-      PORTB  |= _BV(PORTB2);
+      PORTB  |= _BV(PORTB0);
       rxLed   = 1;
     }
   }
@@ -344,7 +344,7 @@ void rxHandle(int8_t sample) {
     rx.state  = OFFLINE;
     // RX led off
     if (rxLed) {
-      PORTB  &= ~_BV(PORTB2);
+      PORTB  &= ~_BV(PORTB0);
       rxLed   = 0;
     }
   }
@@ -370,7 +370,7 @@ void rxDecoder(uint8_t deco_bit) {
     // Check each sample for a HIGH->LOW transition
     case OFFLINE:
       // Check the transition
-      if ((rx.stream & 0x03) == 0x02) {
+      if ((rx.stream & 0x0F) == 0x0E) {
         // We have a transition, let's assume the start bit begins here,
         // but we need a validation, which will be done in PREAMBLE state
         rx.state  = PREAMBLE;
@@ -421,13 +421,16 @@ void rxDecoder(uint8_t deco_bit) {
 
           // We have received a data bit
           case DATA_BIT:
-            // Check if we are still receiveing the data bits
-            if (++rx.bits < DATA_BITS) {
+            // Check if we are still receiving the data bits
+            if (rx.bits++ < DATA_BITS) {
               // Keep received bits, LSB first
               rx.data >>= 1;
               // The received data bit value is the average of all decoded
               // samples.  We count the HIGH samples, threshold at half
               rx.data  |= rx.bitsum > BIT_SAMPLES / 2 ? 0x80 : 0x00;
+              //rxFIFO.in(65 + (rx.bitsum > BIT_SAMPLES / 2));
+              //rxFIFO.in(65 + rx.bitsum);
+              //rxFIFO.in(48 + rx.bits);
               // Prepare for a new bit
               rx.smpls  = 0;
               rx.bitsum = 0;
@@ -536,8 +539,9 @@ void setup() {
   TCCR2A &= ~(_BV(COM2B1) | _BV(COM2B0));
   // No prescaler (p.158)
   TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
-  // Set initial pulse width to the first sample.
-  OCR2A  = wvSmpl[0];
+  // Set initial pulse width to the first sample, progresively
+  for (uint8_t i = 0; i <= wvSmpl[0]; i++)
+    OCR2A  = i;
 #else
   // Configure the PWM PIN 3 (PD3)
   PORTD &= ~(_BV(PORTD3));
@@ -548,8 +552,9 @@ void setup() {
   TCCR2A &= ~(_BV(COM2A1) | _BV(COM2A0));
   // No prescaler (p.158)
   TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
-  // Set initial pulse width to the first sample.
-  OCR2B  = wvSmpl[0];
+  // Set initial pulse width to the first sample, progresively
+  for (uint8_t i = 0; i <= wvSmpl[0]; i++)
+    OCR2B  = i;
 #endif // PWM_PIN
 #else
   // Configure resistor ladder DAC
@@ -557,7 +562,7 @@ void setup() {
 #endif
 
   // Leds
-  DDRB |= _BV(PORTB1) | _BV(PORTB2);
+  DDRB |= _BV(PORTB1) | _BV(PORTB0);
 }
 
 /**
@@ -574,11 +579,11 @@ void loop() {
     rxIdx += wvStepRX[SPACE];
   */
 
-  /*
-    static uint32_t next = millis();
-    if (millis() > next) {
-      Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
-      next += 100;
-    }
-  */
+#ifdef DEBUG
+  static uint32_t next = millis();
+  if (millis() > next) {
+    Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
+    next += 100;
+  }
+#endif
 }
