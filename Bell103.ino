@@ -23,6 +23,8 @@
 
 #include "fifo.h"
 
+#define DEBUG
+
 // Use the PWM DAC (8 bits, one output PIN, uses Timer2) or
 // the resistor ladder (4 bits, 4 PINS)
 #define PWM_DAC
@@ -120,11 +122,16 @@ struct RX_t {
   uint8_t stream  = 0;        // last 8 decoded bit samples
   uint8_t bitsum  = 0;        // sum of the last decoded bit samples
   uint8_t smpls   = 0;        // samples counter for each bit
+
+  int16_t iirX[2] = {0};                        // IIR Filter X cells
+  int16_t iirY[2] = {0};                        // IIR Filter Y cells
 } rx;
 
 // FIFOs
 FIFO txFIFO(6);
 FIFO rxFIFO(6);
+
+FIFO delayFIFO(5);  // 32/2
 
 
 /**
@@ -289,50 +296,21 @@ void txHandle() {
   @param sample the (signed) sample
 */
 void rxHandle(int8_t sample) {
-  int8_t x, y;
-  static uint16_t phSpce, phMark;
   static uint8_t rxLed = 0;
 
-  // Update the phase of the local oscillator for SPACE
-  phSpce += phSpceInc;
-  // Multiply the sample by square waves in quadrature
-  x = sample;
-  if (((phSpce >> 8) + 0x00) & 0x80)
-    x = -1 - x;
-  y = sample;
-  if (((phSpce >> 8) + 0x40) & 0x80)
-    y = -1 - y;
-  // First order low-pass filter.
-  rxSpceI += x - (rxSpceI >> logTau);
-  rxSpceQ += y - (rxSpceQ >> logTau);
-
-  // Update the phase of the local oscillator for MARK
-  phMark += phMarkInc;
-  // Multiply the sample by square waves in quadrature
-  x = sample;
-  if (((phMark >> 8) + 0x00) & 0x80)
-    x = -1 - x;
-  y = sample;
-  if (((phMark >> 8) + 0x40) & 0x80)
-    y = -1 - y;
-  // First order low-pass filter.
-  rxMarkI += x - (rxMarkI >> logTau);
-  rxMarkQ += y - (rxMarkQ >> logTau);
-
-  // Compute power
-  int16_t I, Q;
-  I = rxSpceI >> logTau;
-  Q = rxSpceQ >> logTau;
-  pwSpce = (int8_t)I * (int8_t)I + (int8_t)Q * (int8_t)Q;
-  I = rxMarkI >> logTau;
-  Q = rxMarkQ >> logTau;
-  pwMark = (int8_t)I * (int8_t)I + (int8_t)Q * (int8_t)Q;
+  rx.iirX[0] = rx.iirX[1];
+  rx.iirX[1] = ((delayFIFO.out() - 128) * sample) >> 2;
+  //rx.iirX[1] = ((delayFIFO.out() - 128) * sample) >> 1;
+  rx.iirY[0] = rx.iirY[1];
+  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
+  //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] / 10);
+  delayFIFO.in(sample + 128);
 
   // Validate the RX tones
-  rx.active = (pwSpce >= MIN_PWR) or (pwMark >= MIN_PWR);
+  rx.active = 1;
   if (rx.active) {
     // Call the decoder
-    rxDecoder(((pwMark > pwSpce) ? MARK : SPACE));
+    rxDecoder(((rx.iirY[1] > 0) ? MARK : SPACE));
     // RX led on
     if (not rxLed) {
       PORTB  |= _BV(PORTB0);
@@ -364,6 +342,7 @@ void rxDecoder(uint8_t deco_bit) {
 
   // Count the received samples
   rx.smpls++;
+  //Serial.println(deco_bit);
 
   // Check the RX decoder state
   switch (rx.state) {
@@ -496,6 +475,11 @@ ISR(ADC_vect) {
 void setup() {
   Serial.begin(9600);
 
+  cli();
+  for (uint8_t i = 0; i < 16; i++)
+    delayFIFO.in(128);
+  sei();
+
   // TC1 Control Register B: No prescaling, WGM mode 12
   TCCR1A = 0;
   TCCR1B = _BV(CS10) | _BV(WGM13) | _BV(WGM12);
@@ -582,7 +566,7 @@ void loop() {
 #ifdef DEBUG
   static uint32_t next = millis();
   if (millis() > next) {
-    Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
+    Serial.print(rx.iirX[1]); Serial.print(" "); Serial.println(rx.iirY[1]);
     next += 100;
   }
 #endif
