@@ -415,9 +415,9 @@ uint8_t rxHandle(int8_t sample) {
 }
 
 void checkSerial() {
+  uint8_t c;
   // Check any data on serial port
-  uint8_t c = Serial.peek();
-  if (c != 0xFF) {
+  if (Serial.available() > 0) {
     // There is data on serial port
     if (not txFIFO.full()) {
       // FIFO not full, we can send the data
@@ -428,6 +428,12 @@ void checkSerial() {
       // TX led on
       PORTB |= _BV(PORTB1);
     }
+  }
+
+  // Check if there is any data in RX FIFO
+  if (not rxFIFO.empty()) {
+    c = rxFIFO.out();
+    Serial.write(c);
   }
 }
 
@@ -525,9 +531,11 @@ void loop() {
     rxIdx += wvStepRX[SPACE];
   */
 
-  static uint32_t next = millis();
-  if (millis() > next) {
-    Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
-    next += 100;
-  }
+  /*
+    static uint32_t next = millis();
+    if (millis() > next) {
+      Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
+      next += 100;
+    }
+  */
 }
