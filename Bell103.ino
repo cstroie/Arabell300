@@ -86,7 +86,7 @@ const uint8_t wvStepRX[] = {
 };
 
 // States in TX state machine
-enum TX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, OFFLINE};
+enum TXRX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, OFFLINE};
 
 // Phase increments for SPACE and MARK in RX
 const int32_t phSpceInc = (1L << 16) * rxSpce / F_SAMPLE;   // 13824
@@ -103,10 +103,10 @@ uint16_t pwSpce, pwMark;
 // Transmission related data
 struct TX_t {
   uint8_t onair = 0;        // TX enabled or disabled
-  uint8_t state = OFFLINE;  // TX state (TX_STATE enum)
+  uint8_t state = OFFLINE;  // TX state (TXRX_STATE enum)
   uint8_t data  = 0;        // currently transmitting byte
   uint8_t bit   = NONE;     // currently transmitting bit
-  uint8_t bits  = 0;        // already transmitted bits
+  uint8_t bits  = 0;        // counter of already transmitted bits
   uint8_t idx   = 0;        // wave samples index (start with first sample)
   uint8_t step  = 0;        // wave samples increment step
   uint8_t smpls = 0;        // samples counter for each bit
@@ -114,8 +114,13 @@ struct TX_t {
 
 // Receiving and decoding related data
 struct RX_t {
-  uint8_t bits; // Bits sampled by the demodulator (at ADC speed)
-  uint8_t data; // Actual found bits at correct bitrate
+  uint8_t state = OFFLINE;  // RX decoder state (TXRX_STATE enum)
+  uint8_t bits   = 0; // counter of received bits
+  uint8_t data   = 0; // data bits
+  uint8_t stream = 0; // decoded samples (32 per data bit)
+  uint8_t bitsum = 0; // Sample bit sum for current phase
+  uint8_t smpls = 0;        // samples counter for each bit
+  uint8_t dcdbit   = NONE;     // currently decoded sample
 } rx;
 
 // FIFOs
@@ -315,10 +320,98 @@ uint8_t rxHandle(int8_t sample) {
   Q = rxMarkQ >> logTau;
   pwMark = (int8_t)I * (int8_t)I + (int8_t)Q * (int8_t)Q;
 
-  rx.bits >>= 1;
-  rx.bits |= ((pwMark > pwSpce) ? 0x80 : 0x00);
+  // Keep the decoded bit, bitsum and bit stream
+  rx.dcdbit = ((pwMark > pwSpce) ? MARK : SPACE);
+  rx.bitsum += rx.dcdbit;
+  rx.stream <<= 1;
+  rx.stream |= rx.dcdbit;
 
-  //Serial.print(pwSpce); Serial.print(" "); Serial.println(pwMark);
+  // Samples counter
+  rx.smpls++;
+
+  // Check the RX decoder state
+  switch (rx.state) {
+    // Check each sample for a HIGH->LOW transition
+    case OFFLINE:
+      // Check the transition
+      if ((rx.stream & 0x03) == 0x02) {
+        // We have a transition, let's assume the start bit begins here,
+        // but we need a validation, which will be done in PREAMBLE state
+        rx.state  = PREAMBLE;
+        rx.smpls  = 0;
+        rx.bitsum = 0;
+      }
+      break;
+
+    // Validate the start bit after half the samples have been collected
+    case PREAMBLE:
+      // Check if we have collected enough samples
+      if (rx.smpls >= BIT_SAMPLES / 2) {
+        // Check the average level of decoded samples: less than a quarter of
+        // them may be HIGHs; the bitsum should be lesser than BIT_SAMPLES/8
+        if (rx.bitsum > BIT_SAMPLES / 8)
+          // Too many HIGH, this is not a start bit, go offline
+          rx.state  = OFFLINE;
+        else
+          // Could be a start bit, keep on going and check again at the end
+          rx.state  = START_BIT;
+      }
+      break;
+
+    // Other states than OFFLINE and PREAMBLE
+    default:
+      // Check if we have received all the samples required for a bit
+      if (rx.smpls >= BIT_SAMPLES) {
+
+        // Check the RX decoder state
+        switch (rx.state) {
+          // We have received the start bit
+          case START_BIT:
+            // Check the average level of decoded samples: less than a quarter
+            // of them may be HIGH, so, the bitsum should be lesser than
+            // BIT_SAMPLES/4
+            if (rx.bitsum > BIT_SAMPLES / 4) {
+              // Too many HIGHs, this is not a start bit, go offline
+              rx.state  = OFFLINE;
+            }
+            else {
+              // This is a start bit, go on to data bits
+              rx.state  = DATA_BIT;
+              rx.smpls  = 0;
+              rx.bitsum = 0;
+              rx.bits   = 0;
+            }
+            break;
+
+          // We have received a data bit
+          case DATA_BIT:
+            // Check if we are still receiveing the data bits
+            if (++rx.bits < DATA_BITS) {
+              // Keep received bits, LSB first
+              rx.data >>= 1;
+              // The received data bit value is the average of all decoded
+              // samples.  We count the HIGH samples, threshold at half
+              rx.data  |= rx.bitsum > BIT_SAMPLES / 2 ? 0x80 : 0x00;
+              // Prepare for a new bit
+              rx.smpls  = 0;
+              rx.bitsum = 0;
+            }
+            else {
+              // We have received all the data bits, push the data into FIFO
+              rxFIFO.in(rx.data);
+              // Go on with the stop bit, do not mind its value...
+              rx.state  = STOP_BIT;
+              rx.smpls  = 0;
+            }
+            break;
+
+          // We have received the stop bit, start over again
+          case STOP_BIT:
+            rx.state  = OFFLINE;
+            break;
+        }
+      }
+  }
 }
 
 void checkSerial() {
