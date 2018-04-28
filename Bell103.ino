@@ -23,7 +23,8 @@
 
 #include "fifo.h"
 
-#define DEBUG
+//#define DEBUG
+//#define DEBUG_RX
 
 // Use the PWM DAC (8 bits, one output PIN, uses Timer2) or
 // the resistor ladder (4 bits, 4 PINS)
@@ -307,10 +308,11 @@ void rxHandle(int8_t sample) {
   delayFIFO.in(sample + 128);
 
   // Validate the RX tones
-  rx.active = 1;
+  rx.active = 1; //abs(rx.iirY[1] > 1);
   if (rx.active) {
     // Call the decoder
     rxDecoder(((rx.iirY[1] > 0) ? MARK : SPACE));
+    //rxDecoder(((rx.iirX[1] > 0) ? MARK : SPACE));
     // RX led on
     if (not rxLed) {
       PORTB  |= _BV(PORTB0);
@@ -407,25 +409,41 @@ void rxDecoder(uint8_t deco_bit) {
               // The received data bit value is the average of all decoded
               // samples.  We count the HIGH samples, threshold at half
               rx.data  |= rx.bitsum > BIT_SAMPLES / 2 ? 0x80 : 0x00;
-              //rxFIFO.in(65 + (rx.bitsum > BIT_SAMPLES / 2));
+#ifdef DEBUG_RX
+              rxFIFO.in(47 + rx.bits);
+              rxFIFO.in((rx.bitsum > BIT_SAMPLES / 2) ? '*' : ' ');
               //rxFIFO.in(65 + rx.bitsum);
-              //rxFIFO.in(48 + rx.bits);
+#endif
               // Prepare for a new bit
               rx.smpls  = 0;
               rx.bitsum = 0;
             }
             else {
               // We have received all the data bits, push the data into FIFO
+#ifdef DEBUG_RX
+              rxFIFO.in(32);
+#endif
               rxFIFO.in(rx.data);
+#ifdef DEBUG_RX
+              rxFIFO.in(10);
+#endif
               // Go on with the stop bit, do not mind its value...
               rx.state  = STOP_BIT;
               rx.smpls  = 0;
+              rx.bitsum = 0;
             }
             break;
 
           // We have received the stop bit, start over again
           case STOP_BIT:
             rx.state  = OFFLINE;
+            /*
+              if (rx.bitsum > BIT_SAMPLES / 2) {
+              rxFIFO.in(32);
+              rxFIFO.in(rx.data);
+              rxFIFO.in(10);
+              }
+            */
             break;
         }
       }
@@ -476,9 +494,10 @@ void setup() {
   Serial.begin(9600);
 
   cli();
-  for (uint8_t i = 0; i < 16; i++)
+  for (uint8_t i = 0; i < 8; i++)
     delayFIFO.in(128);
   sei();
+  //delayFIFO.in(128);
 
   // TC1 Control Register B: No prescaling, WGM mode 12
   TCCR1A = 0;
