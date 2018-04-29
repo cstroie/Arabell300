@@ -111,7 +111,7 @@ struct TX_t {
   uint8_t data    = 0;        // transmitting data bits, shift out, LSB first
   uint8_t bits    = 0;        // counter of already transmitted bits
   uint8_t idx     = 0;        // wave samples index (start with first sample)
-  uint8_t smpls   = 0;        // samples counter for each bit
+  uint8_t clk   = 0;        // samples counter for each bit
 } tx;
 
 // Receiving and decoding related data
@@ -122,7 +122,7 @@ struct RX_t {
   uint8_t bits    = 0;        // counter of received data bits
   uint8_t stream  = 0;        // last 8 decoded bit samples
   uint8_t bitsum  = 0;        // sum of the last decoded bit samples
-  uint8_t smpls   = 0;        // samples counter for each bit
+  uint8_t clk   = 0;        // samples counter for each bit
 
   int16_t iirX[2] = {0};                        // IIR Filter X cells
   int16_t iirY[2] = {0};                        // IIR Filter Y cells
@@ -191,9 +191,9 @@ void txHandle() {
     tx.idx += wvStepTX[tx.dtbit];
 
     // Check if we have sent all samples for a bit
-    if (tx.smpls++ >= BIT_SAMPLES) {
+    if (tx.clk++ >= BIT_SAMPLES) {
       // Reset the samples counter
-      tx.smpls  = 0;
+      tx.clk  = 0;
 
       // One bit finished, check the state and choose the next bit and state
       switch (tx.state) {
@@ -273,7 +273,7 @@ void txHandle() {
             tx.dtbit  = NONE;
             // Prepare for the future TX
             tx.idx    = 0;
-            tx.smpls  = 0;
+            tx.clk  = 0;
           }
           // Still sending the trail carrier, check the TX FIFO again
           else if (not txFIFO.empty()) {
@@ -334,28 +334,27 @@ void rxHandle(int8_t sample) {
   The RX data decoder.  It gets the decoded data bit and tries to figure out
   the entire received byte.
 
-  @param deco_bit the decoded data bit
+  @param sample the decoded data bit
 */
-void rxDecoder(uint8_t deco_bit) {
-  // Keep the decoded bit, bitsum and bit stream (MSB first)
-  rx.bitsum += deco_bit;
+void rxDecoder(uint8_t sample) {
+  // Keep the bitsum and bit stream
+  rx.bitsum  += sample;
   rx.stream <<= 1;
-  rx.stream |= deco_bit;
+  rx.stream  |= sample;
 
   // Count the received samples
-  rx.smpls++;
-  //Serial.println(deco_bit);
+  rx.clk++;
 
   // Check the RX decoder state
   switch (rx.state) {
     // Check each sample for a HIGH->LOW transition
     case OFFLINE:
       // Check the transition
-      if ((rx.stream & 0x0F) == 0x0E) {
+      if ((rx.stream & 0x03) == 0x02) {
         // We have a transition, let's assume the start bit begins here,
         // but we need a validation, which will be done in PREAMBLE state
         rx.state  = PREAMBLE;
-        rx.smpls  = 0;
+        rx.clk    = 0;
         rx.bitsum = 0;
       }
       break;
@@ -363,7 +362,7 @@ void rxDecoder(uint8_t deco_bit) {
     // Validate the start bit after half the samples have been collected
     case PREAMBLE:
       // Check if we have collected enough samples
-      if (rx.smpls >= BIT_SAMPLES / 2) {
+      if (rx.clk >= BIT_SAMPLES / 2) {
         // Check the average level of decoded samples: less than a quarter of
         // them may be HIGHs; the bitsum should be lesser than BIT_SAMPLES/8
         if (rx.bitsum > BIT_SAMPLES / 8)
@@ -378,12 +377,20 @@ void rxDecoder(uint8_t deco_bit) {
     // Other states than OFFLINE and PREAMBLE
     default:
       // Check if we have received all the samples required for a bit
-      if (rx.smpls >= BIT_SAMPLES) {
+      if (rx.clk >= BIT_SAMPLES) {
 
         // Check the RX decoder state
         switch (rx.state) {
+
+
+
           // We have received the start bit
           case START_BIT:
+#ifdef DEBUG_RX
+            rxFIFO.in('S');
+            //rxFIFO.in((rx.bitsum > BIT_SAMPLES / 2) ? '#' : '_');
+            rxFIFO.in((rx.bitsum >> 2) + 'A');
+#endif
             // Check the average level of decoded samples: less than a quarter
             // of them may be HIGH, so, the bitsum should be lesser than
             // BIT_SAMPLES/4
@@ -394,7 +401,7 @@ void rxDecoder(uint8_t deco_bit) {
             else {
               // This is a start bit, go on to data bits
               rx.state  = DATA_BIT;
-              rx.smpls  = 0;
+              rx.clk    = 0;
               rx.bitsum = 0;
               rx.bits   = 0;
             }
@@ -402,48 +409,45 @@ void rxDecoder(uint8_t deco_bit) {
 
           // We have received a data bit
           case DATA_BIT:
-            // Check if we are still receiving the data bits
-            if (rx.bits++ < DATA_BITS) {
-              // Keep received bits, LSB first
-              rx.data >>= 1;
-              // The received data bit value is the average of all decoded
-              // samples.  We count the HIGH samples, threshold at half
-              rx.data  |= rx.bitsum > BIT_SAMPLES / 2 ? 0x80 : 0x00;
+            // Keep received bits, LSB first
+            rx.data >>= 1;
+            // The received data bit value is the average of all decoded
+            // samples.  We count the HIGH samples, threshold at half
+            rx.data  |= rx.bitsum > BIT_SAMPLES / 2 ? 0x80 : 0x00;
 #ifdef DEBUG_RX
-              rxFIFO.in(47 + rx.bits);
-              rxFIFO.in((rx.bitsum > BIT_SAMPLES / 2) ? '*' : ' ');
-              //rxFIFO.in(65 + rx.bitsum);
+            rxFIFO.in(47 + rx.bits);
+            //rxFIFO.in((rx.bitsum > BIT_SAMPLES / 2) ? '#' : '_');
+            rxFIFO.in((rx.bitsum >> 2) + 'A');
 #endif
+            // Check if we are still receiving the data bits
+            if (++rx.bits < DATA_BITS) {
               // Prepare for a new bit
-              rx.smpls  = 0;
+              rx.clk    = 0;
               rx.bitsum = 0;
             }
             else {
-              // We have received all the data bits, push the data into FIFO
-#ifdef DEBUG_RX
-              rxFIFO.in(32);
-#endif
-              rxFIFO.in(rx.data);
-#ifdef DEBUG_RX
-              rxFIFO.in(10);
-#endif
-              // Go on with the stop bit, do not mind its value...
+              // Go on with the stop bit, count only half the samples
               rx.state  = STOP_BIT;
-              rx.smpls  = 0;
+              rx.clk    = BIT_SAMPLES / 2;
               rx.bitsum = 0;
             }
             break;
 
-          // We have received the stop bit, start over again
+          // We have received the stop bit
           case STOP_BIT:
-            rx.state  = OFFLINE;
-            /*
-              if (rx.bitsum > BIT_SAMPLES / 2) {
-              rxFIFO.in(32);
+            // Push the data into FIFO
+#ifdef DEBUG_RX
+            rxFIFO.in('T');
+            rxFIFO.in((rx.bitsum >> 2) + 'A');
+            rxFIFO.in(' ');
+#endif
+            if (rx.bitsum > BIT_SAMPLES / 4)
               rxFIFO.in(rx.data);
-              rxFIFO.in(10);
-              }
-            */
+#ifdef DEBUG_RX
+            rxFIFO.in(10);
+#endif
+            // Start over again
+            rx.state  = OFFLINE;
             break;
         }
       }
