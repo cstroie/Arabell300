@@ -33,9 +33,6 @@
 // The PWM pin may be 3 or 11 (Timer2)
 #define PWM_PIN 3
 
-// Minimal power of the receiving signals (arbitrary value)
-#define MIN_PWR 1
-
 // CPU frequency correction for sampling timer
 #define F_COR (-120000L)
 
@@ -89,7 +86,7 @@ const uint8_t wvStepRX[] = {
 };
 
 // States in RX and TX finite states machines
-enum TXRX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, OFFLINE};
+enum TXRX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, WAIT};
 
 // Phase increments for SPACE and MARK in RX (fixed point arithmetics)
 const int32_t phSpceInc = (1L << 16) * rxSpce / F_SAMPLE;   // 13824
@@ -106,33 +103,36 @@ uint16_t pwSpce, pwMark;
 // Transmission related data
 struct TX_t {
   uint8_t active  = 0;        // currently transmitting or not
-  uint8_t state   = OFFLINE;  // TX state (TXRX_STATE enum)
-  uint8_t dtbit   = NONE;     // currently transmitting data bit
+  uint8_t state   = WAIT;     // TX state (TXRX_STATE enum)
+  uint8_t dtbit   = MARK;     // currently transmitting data bit
   uint8_t data    = 0;        // transmitting data bits, shift out, LSB first
   uint8_t bits    = 0;        // counter of already transmitted bits
   uint8_t idx     = 0;        // wave samples index (start with first sample)
-  uint8_t clk   = 0;        // samples counter for each bit
+  uint8_t clk     = 0;        // samples counter for each bit
 } tx;
 
 // Receiving and decoding related data
 struct RX_t {
   uint8_t active  = 0;        // currently receiving proper signals or not
-  uint8_t state   = OFFLINE;  // RX decoder state (TXRX_STATE enum)
+  uint8_t state   = WAIT;     // RX decoder state (TXRX_STATE enum)
   uint8_t data    = 0;        // the received data bits, shift in, LSB first
   uint8_t bits    = 0;        // counter of received data bits
   uint8_t stream  = 0;        // last 8 decoded bit samples
   uint8_t bitsum  = 0;        // sum of the last decoded bit samples
-  uint8_t clk   = 0;        // samples counter for each bit
-
-  int16_t iirX[2] = {0};                        // IIR Filter X cells
-  int16_t iirY[2] = {0};                        // IIR Filter Y cells
+  uint8_t clk     = 0;        // samples counter for each bit
+  int16_t iirX[2] = {0, 0};   // IIR Filter X cells
+  int16_t iirY[2] = {0, 0};   // IIR Filter Y cells
 } rx;
+
+// Modem configuration
+struct CFG_t {
+  uint8_t txCarrier: 1; // Keep a carrier going when transmitting
+} cfg;
 
 // FIFOs
 FIFO txFIFO(6);
 FIFO rxFIFO(6);
-
-FIFO delayFIFO(5);  // 32/2
+FIFO delayFIFO(4);
 
 
 /**
@@ -184,7 +184,7 @@ void txHandle() {
   uint8_t sample = wvSample(tx.idx);
 
   // Check if we are transmitting
-  if (tx.active > 0) {
+  if (tx.active == 1 or cfg.txCarrier == 1) {
     // Output the sample
     txDAC(sample);
     // Step up the index for the next sample
@@ -198,14 +198,16 @@ void txHandle() {
       // One bit finished, check the state and choose the next bit and state
       switch (tx.state) {
         // We have been offline, prepare the transmission
-        case OFFLINE:
-          tx.state  = PREAMBLE;
+        case WAIT:
           tx.dtbit  = MARK;
-          tx.idx    = 0;
-          tx.bits   = 0;
           // Get data from FIFO, if any
-          if (not txFIFO.empty())
-            tx.data = txFIFO.out();
+          if (not txFIFO.empty()) {
+            tx.data   = txFIFO.out();
+            tx.state  = PREAMBLE;
+            tx.bits   = 0;
+          }
+          else
+            tx.state  = WAIT;
           break;
 
         // We are sending the preamble carrier
@@ -264,16 +266,16 @@ void txHandle() {
           if (++tx.bits > CARR_BITS) {
             // Disable TX and go offline
             tx.active = 0;
-            tx.state  = OFFLINE;
+            tx.state  = WAIT;
             // TX led off
             PORTB    &= ~_BV(PORTB1);
           }
-          else if (tx.bits == CARR_BITS) {
+          else if (tx.bits == CARR_BITS and cfg.txCarrier != 1) {
             // After the last trail carrier bit, send isoelectric line
             tx.dtbit  = NONE;
             // Prepare for the future TX
             tx.idx    = 0;
-            tx.clk  = 0;
+            tx.clk    = 0;
           }
           // Still sending the trail carrier, check the TX FIFO again
           else if (not txFIFO.empty()) {
@@ -297,8 +299,6 @@ void txHandle() {
   @param sample the (signed) sample
 */
 void rxHandle(int8_t sample) {
-  static uint8_t rxLed = 0;
-
   rx.iirX[0] = rx.iirX[1];
   rx.iirX[1] = ((delayFIFO.out() - 128) * sample) >> 2;
   //rx.iirX[1] = ((delayFIFO.out() - 128) * sample) >> 1;
@@ -312,21 +312,10 @@ void rxHandle(int8_t sample) {
   if (rx.active) {
     // Call the decoder
     rxDecoder(((rx.iirY[1] > 0) ? MARK : SPACE));
-    //rxDecoder(((rx.iirX[1] > 0) ? MARK : SPACE));
-    // RX led on
-    if (not rxLed) {
-      PORTB  |= _BV(PORTB0);
-      rxLed   = 1;
-    }
   }
   else {
     // Disable the decoder and clear all partially received data
-    rx.state  = OFFLINE;
-    // RX led off
-    if (rxLed) {
-      PORTB  &= ~_BV(PORTB0);
-      rxLed   = 0;
-    }
+    rx.state  = WAIT;
   }
 }
 
@@ -337,6 +326,8 @@ void rxHandle(int8_t sample) {
   @param sample the decoded data bit
 */
 void rxDecoder(uint8_t sample) {
+  static uint8_t rxLed = 0;
+
   // Keep the bitsum and bit stream
   rx.bitsum  += sample;
   rx.stream <<= 1;
@@ -348,7 +339,7 @@ void rxDecoder(uint8_t sample) {
   // Check the RX decoder state
   switch (rx.state) {
     // Check each sample for a HIGH->LOW transition
-    case OFFLINE:
+    case WAIT:
       // Check the transition
       if ((rx.stream & 0x03) == 0x02) {
         // We have a transition, let's assume the start bit begins here,
@@ -365,25 +356,28 @@ void rxDecoder(uint8_t sample) {
       if (rx.clk >= BIT_SAMPLES / 2) {
         // Check the average level of decoded samples: less than a quarter of
         // them may be HIGHs; the bitsum should be lesser than BIT_SAMPLES/8
-        if (rx.bitsum > BIT_SAMPLES / 8)
+        if (rx.bitsum > BIT_SAMPLES / 8) {
           // Too many HIGH, this is not a start bit, go offline
-          rx.state  = OFFLINE;
-        else
+          rx.state  = WAIT;
+          // RX led off
+          PORTB  &= ~_BV(PORTB0);
+        }
+        else {
           // Could be a start bit, keep on going and check again at the end
           rx.state  = START_BIT;
+          // RX led on
+          PORTB  |= _BV(PORTB0);
+        }
       }
       break;
 
-    // Other states than OFFLINE and PREAMBLE
+    // Other states than WAIT and PREAMBLE
     default:
       // Check if we have received all the samples required for a bit
       if (rx.clk >= BIT_SAMPLES) {
 
         // Check the RX decoder state
         switch (rx.state) {
-
-
-
           // We have received the start bit
           case START_BIT:
 #ifdef DEBUG_RX
@@ -395,8 +389,10 @@ void rxDecoder(uint8_t sample) {
             // of them may be HIGH, so, the bitsum should be lesser than
             // BIT_SAMPLES/4
             if (rx.bitsum > BIT_SAMPLES / 4) {
-              // Too many HIGHs, this is not a start bit, go offline
-              rx.state  = OFFLINE;
+              // Too many HIGHs, this is not a start bit
+              rx.state  = WAIT;
+              // RX led off
+              PORTB  &= ~_BV(PORTB0);
             }
             else {
               // This is a start bit, go on to data bits
@@ -447,7 +443,9 @@ void rxDecoder(uint8_t sample) {
             rxFIFO.in(10);
 #endif
             // Start over again
-            rx.state  = OFFLINE;
+            rx.state  = WAIT;
+            // RX led off
+            PORTB  &= ~_BV(PORTB0);
             break;
         }
       }
@@ -570,6 +568,9 @@ void setup() {
 
   // Leds
   DDRB |= _BV(PORTB1) | _BV(PORTB0);
+
+  // Modem configuration
+  cfg.txCarrier = 1;
 }
 
 /**
