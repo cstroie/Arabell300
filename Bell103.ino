@@ -25,6 +25,7 @@
 
 //#define DEBUG
 //#define DEBUG_RX
+//#define DEBUG_RX_LVL
 
 // Use the PWM DAC (8 bits, one output PIN, uses Timer2) or
 // the resistor ladder (4 bits, 4 PINS)
@@ -128,6 +129,14 @@ struct RX_t {
 struct CFG_t {
   uint8_t txCarrier: 1; // Keep a carrier going when transmitting
 } cfg;
+
+#ifdef DEBUG_RX_LVL
+// Count input samples and get the minimum, maximum and input level
+uint8_t inSamples = 0;
+int8_t  inMin     = 0x7F;
+int8_t  inMax     = 0x80;
+uint8_t inLevel   = 0x00;
+#endif
 
 // FIFOs
 FIFO txFIFO(6);
@@ -299,6 +308,20 @@ void txHandle() {
   @param sample the (signed) sample
 */
 void rxHandle(int8_t sample) {
+#ifdef DEBUG_RX_LVL
+  // Keep sample for level measurements
+  if (sample < inMin) inMin = sample;
+  if (sample > inMax) inMax = sample;
+  // Count 256 samples, which means 8 bits
+  if (++inSamples == 0x00) {
+    // Get the level
+    inLevel = inMax - inMin;
+    // Reset MIN and MAX
+    inMin = 0x7F;
+    inMax = 0x80;
+  }
+#endif
+
   rx.iirX[0] = rx.iirX[1];
   rx.iirX[1] = ((delayFIFO.out() - 128) * sample) >> 2;
   //rx.iirX[1] = ((delayFIFO.out() - 128) * sample) >> 1;
@@ -579,6 +602,14 @@ void setup() {
 void loop() {
 
   serialHandle();
+
+#ifdef DEBUG_RX_LVL
+  static uint32_t next = millis();
+  if (millis() > next) {
+    Serial.println(inLevel);
+    next += 8 * 1000 / BAUD;
+  }
+#endif
 
   /*
     // Simulation
