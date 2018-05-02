@@ -25,23 +25,6 @@
 
 //#define DEBUG
 
-
-
-
-
-// Phase increments for SPACE and MARK in RX (fixed point arithmetics)
-const int32_t phSpceInc = (1L << 16) * BELL103.frqAnsw[SPACE] / F_SAMPLE;   // 13824
-const int32_t phMarkInc = (1L << 16) * BELL103.frqAnsw[MARK] / F_SAMPLE;    // 15189
-const uint8_t logTau    = 4;                                // tau = 64 / SAMPLING_FREQ = 6.666 ms
-
-// Demodulated (I, Q) amplitudes for SPACE and Mark
-volatile int16_t rxSpceI, rxSpceQ, rxMarkI, rxMarkQ;
-
-// Power for SPACE and Mark
-uint16_t pwSpce, pwMark;
-
-
-
 // Modem configuration
 CFG_t cfg;
 
