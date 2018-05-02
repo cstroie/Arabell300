@@ -32,7 +32,7 @@
 
 class HAYES {
   public:
-    HAYES(CFG_t cfg, AFSK afsk);
+    HAYES(CFG_t *cfg, AFSK *afsk);
     ~HAYES();
 
     int16_t getInteger(char* buf, int8_t idx, uint8_t len = 32);
@@ -44,8 +44,8 @@ class HAYES {
     uint8_t handle();
 
   private:
-    CFG_t _cfg;
-    AFSK  _afsk;
+    CFG_t *_cfg;
+    AFSK  *_afsk;
 
     // String buffer
     char buf[45];

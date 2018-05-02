@@ -19,7 +19,7 @@
 
 #include "hayes.h"
 
-HAYES::HAYES(CFG_t cfg, AFSK afsk): _cfg(cfg), _afsk(afsk) {
+HAYES::HAYES(CFG_t *cfg, AFSK *afsk): _cfg(cfg), _afsk(afsk) {
 }
 
 HAYES::~HAYES() {
@@ -171,7 +171,7 @@ uint8_t HAYES::handle() {
     while (buf[idx++])
       buf[idx] = toupper(buf[idx]);
     // Local terminal echo
-    if (_cfg.echo) {
+    if (_cfg->echo) {
       Serial.print(F("AT")); Serial.println(buf);
     }
     // Reset the buffer index
@@ -183,14 +183,14 @@ uint8_t HAYES::handle() {
       case 'B':
         if (buf[idx] == '?') {
           // Get communication protocol
-          Serial.print(F("B: ")); Serial.println(_cfg.compro);
+          Serial.print(F("B: ")); Serial.println(_cfg->compro);
           result = true;
         }
         else {
           // Get the integer value
           value = getValidInteger(buf, idx, 0, 31, HAYES_NUM_ERROR);
           if (value != HAYES_NUM_ERROR) {
-            _cfg.compro = value;
+            _cfg->compro = value;
             // Change the protocol
             //_afsk.setProtocol();
             result = true;
@@ -202,11 +202,11 @@ uint8_t HAYES::handle() {
       case 'C':
         if (buf[idx] == '?') {
           // Get local echo
-          Serial.print(F("C: ")); Serial.println(_cfg.txcarr);
+          Serial.print(F("C: ")); Serial.println(_cfg->txcarr);
           result = true;
         }
         else if (len == idx) {
-          _cfg.txcarr = 0x00;
+          _cfg->txcarr = 0x00;
           result = true;
         }
         else {
@@ -214,7 +214,7 @@ uint8_t HAYES::handle() {
           value = getValidDigit(buf, idx, 0, 1, HAYES_NUM_ERROR);
           if (value != HAYES_NUM_ERROR) {
             // Set echo on or off
-            _cfg.txcarr = value;
+            _cfg->txcarr = value;
             result = true;
           }
         }
@@ -225,11 +225,11 @@ uint8_t HAYES::handle() {
       case 'E':
         if (buf[idx] == '?') {
           // Get local echo
-          Serial.print(F("E: ")); Serial.println(_cfg.echo);
+          Serial.print(F("E: ")); Serial.println(_cfg->echo);
           result = true;
         }
         else if (len == idx) {
-          _cfg.echo = 0x00;
+          _cfg->echo = 0x00;
           result = true;
         }
         else {
@@ -237,7 +237,7 @@ uint8_t HAYES::handle() {
           value = getValidDigit(buf, idx, 0, 1, HAYES_NUM_ERROR);
           if (value != HAYES_NUM_ERROR) {
             // Set echo on or off
-            _cfg.echo = value;
+            _cfg->echo = value;
             result = true;
           }
         }
@@ -267,11 +267,11 @@ uint8_t HAYES::handle() {
             rqInfo = rqInfo >> 1;
             // 1 ROM checksum
             if (rqInfo & 0x01)
-              Serial.println(_cfg.crc8, 16);
+              Serial.println(_cfg->crc8, 16);
             rqInfo = rqInfo >> 1;
             // 2 Tests ROM checksum THEN reports it
             if (rqInfo & 0x01)
-              Serial.println(_cfg.crc8, 16);
+              Serial.println(_cfg->crc8, 16);
             rqInfo = rqInfo >> 1;
             // 3 Firmware revision level.
             if (rqInfo & 0x01) {
@@ -297,11 +297,11 @@ uint8_t HAYES::handle() {
       case 'L':
         if (buf[idx] == '?') {
           // Get speaker volume level
-          Serial.print(F("L: ")); Serial.println(_cfg.spkl);
+          Serial.print(F("L: ")); Serial.println(_cfg->spkl);
           result = true;
         }
         else if (len == idx) {
-          _cfg.spkl = 0x00;
+          _cfg->spkl = 0x00;
           result = true;
         }
         else {
@@ -309,7 +309,7 @@ uint8_t HAYES::handle() {
           value = getValidDigit(buf, idx, 0, 3, HAYES_NUM_ERROR);
           if (value != HAYES_NUM_ERROR) {
             // Set speaker volume
-            _cfg.spkl = value;
+            _cfg->spkl = value;
             result = true;
           }
         }
@@ -319,11 +319,11 @@ uint8_t HAYES::handle() {
       case 'M':
         if (buf[idx] == '?') {
           // Get speaker mode
-          Serial.print(F("M: ")); Serial.println(_cfg.spkm);
+          Serial.print(F("M: ")); Serial.println(_cfg->spkm);
           result = true;
         }
         else if (len == idx) {
-          _cfg.spkm = 0x00;
+          _cfg->spkm = 0x00;
           result = true;
         }
         else {
@@ -331,7 +331,7 @@ uint8_t HAYES::handle() {
           value = getValidDigit(buf, idx, 0, 3, HAYES_NUM_ERROR);
           if (value != HAYES_NUM_ERROR) {
             // Set speaker on or off mode
-            _cfg.spkm = value;
+            _cfg->spkm = value;
             result = true;
           }
         }
@@ -341,11 +341,11 @@ uint8_t HAYES::handle() {
       case 'O':
         if (buf[idx] == '?') {
           // Get online mode
-          Serial.print(F("O: ")); Serial.println(_afsk.online);
+          Serial.print(F("O: ")); Serial.println(_afsk->online);
           result = true;
         }
         else if (len == idx) {
-          _afsk.online = 0x01;
+          _afsk->online = 0x01;
           result = true;
         }
         else {
@@ -353,7 +353,7 @@ uint8_t HAYES::handle() {
           value = getValidDigit(buf, idx, 0, 1, HAYES_NUM_ERROR);
           if (value != HAYES_NUM_ERROR) {
             // Set online mode
-            _afsk.online = 0x01;
+            _afsk->online = 0x01;
             result = true;
           }
         }
@@ -363,11 +363,11 @@ uint8_t HAYES::handle() {
       case 'Q':
         if (buf[idx] == '?') {
           // Get quiet mode
-          Serial.print(F("Q: ")); Serial.println(_cfg.scqt);
+          Serial.print(F("Q: ")); Serial.println(_cfg->scqt);
           result = true;
         }
         else if (len == idx) {
-          _cfg.scqt = 0x00;
+          _cfg->scqt = 0x00;
           result = true;
         }
         else {
@@ -375,7 +375,7 @@ uint8_t HAYES::handle() {
           value = getValidDigit(buf, idx, 0, 1, HAYES_NUM_ERROR);
           if (value != HAYES_NUM_ERROR) {
             // Set console quiet mode off or on
-            _cfg.scqt = value;
+            _cfg->scqt = value;
             result = true;
           }
         }

@@ -156,7 +156,7 @@ class AFSK {
   public:
 
     uint8_t online = 0;     // If on-line, the modem works in data mode, else in command mode
-    
+
 #ifdef DEBUG_RX_LVL
     // Get the input level
     uint8_t inLevel   = 0x00;
@@ -165,14 +165,14 @@ class AFSK {
     AFSK();
     ~AFSK();
 
-    void init(AFSK_t afskMode, CFG_t cfg);
+    void init(AFSK_t afskMode, CFG_t *cfg);
     void initSteps();
     void handle();
     void serialHandle();
 
   private:
     AFSK_t  _afsk;
-    CFG_t   _cfg;
+    CFG_t   *_cfg;
 
     uint8_t bias = 0x80;
 

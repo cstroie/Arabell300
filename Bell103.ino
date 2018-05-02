@@ -33,7 +33,7 @@ AFSK afsk;
 
 // The AT-Hayes interface
 #include "hayes.h"
-HAYES hayes(cfg, afsk);
+HAYES hayes(&cfg, &afsk);
 
 
 /**
@@ -54,7 +54,7 @@ void setup() {
   cfg.txcarr = 1;  // Keep a carrier going when transmitting
 
   // Define and configure the afsk
-  afsk.init(BELL103, cfg);
+  afsk.init(BELL103, &cfg);
 }
 
 /**

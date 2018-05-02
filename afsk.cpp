@@ -105,7 +105,7 @@ AFSK::~AFSK() {
 
   @param x the afsk modem type
 */
-void AFSK::init(AFSK_t afskMode, CFG_t cfg) {
+void AFSK::init(AFSK_t afskMode, CFG_t *cfg) {
   _afsk = afskMode;
   _cfg  = cfg;
   this->initSteps();
@@ -156,7 +156,7 @@ void AFSK::txHandle() {
   uint8_t sample = wave.sample(tx.idx);
 
   // Check if we are transmitting
-  if (tx.active == 1 or _cfg.txcarr == 1) {
+  if (tx.active == 1 or _cfg->txcarr == 1) {
     // Output the sample
     DAC(sample);
     // Step up the index for the next sample
@@ -242,7 +242,7 @@ void AFSK::txHandle() {
             // TX led off
             PORTB    &= ~_BV(PORTB1);
           }
-          else if (tx.bits == CARR_BITS and _cfg.txcarr != 1) {
+          else if (tx.bits == CARR_BITS and _cfg->txcarr != 1) {
             // After the last trail carrier bit, send isoelectric line
             tx.dtbit  = NONE;
             // Prepare for the future TX
@@ -444,8 +444,42 @@ void AFSK::rxDecoder(uint8_t bt) {
 */
 void AFSK::serialHandle() {
   uint8_t c;
+  static uint8_t escCount = 0;
+  static uint32_t escFirst = 0;
+  static uint32_t escLast = 0;
+
+  if (escCount == 3) {
+    if (millis() - escLast > 1000) {
+      // This is it, break
+      online = 0;
+    }
+    else {
+      if (Serial.available() > 0) {
+        escCount = 0;
+      }
+    }
+  }
+
   // Check any data on serial port
   if (Serial.available() > 0) {
+    // Check for +++ escape sequence
+    if (Serial.peek() == '+') {
+      // Check when we saw the first
+      if (millis() - escFirst > 1000) {
+        // This is the first
+        escCount = 1;
+        escFirst = millis();
+      }
+      else {
+        // Count them
+        escCount++;
+        if (escCount == 3) {
+          // This is the last, keep the time
+          escLast = millis();
+        }
+      }
+    }
+
     // There is data on serial port
     if (not txFIFO.full()) {
       // FIFO not full, we can send the data
