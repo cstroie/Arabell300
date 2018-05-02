@@ -22,9 +22,17 @@
 #include "fifo.h"
 
 FIFO::FIFO(uint8_t bitsize): _bitsize(bitsize) {
-  _size = (1 << _bitsize);
-  _mask = _size - 1;
-  buf = (uint8_t*)malloc(_size);
+  if (bitsize >= 8) {
+    // Limit to 256
+    _size = 0x00;
+    _mask = 0xFF;
+    buf = (uint8_t*)malloc(0x0100);
+  }
+  else {
+    _size = (1 << _bitsize);
+    _mask = _size - 1;
+    buf = (uint8_t*)malloc(_size);
+  }
 }
 
 FIFO::~FIFO() {
@@ -56,7 +64,7 @@ uint8_t FIFO::empty() {
 }
 
 uint8_t FIFO::_len() {
-  return ((i_in < i_out) ? (_size + i_in - i_out) : (i_in - i_out));
+  return ((i_out > i_in) ? (_size + i_in - i_out) : (i_in - i_out));
 }
 
 uint8_t FIFO::len() {
