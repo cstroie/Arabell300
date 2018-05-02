@@ -243,9 +243,9 @@ void AFSK::rxHandle(int8_t sample) {
   The RX data decoder.  It gets the decoded data bit and tries to figure out
   the entire received byte.
 
-  @param sample the decoded data bit
+  @param bt the decoded data bit
 */
-void AFSK::rxDecoder(uint8_t sample) {
+void AFSK::rxDecoder(uint8_t bt) {
   static uint8_t rxLed = 0;
 
   // Keep the bitsum and bit stream
@@ -399,8 +399,10 @@ void AFSK::serialHandle() {
   }
 }
 
+/**
+  Handle both the TX and RX
+*/
 void AFSK::handle() {
   this->txHandle();
   this->rxHandle(ADC - bias);
 }
-

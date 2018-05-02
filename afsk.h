@@ -163,7 +163,6 @@ class AFSK {
     void handle();
     void serialHandle();
 
-
   private:
     AFSK_t  _afsk;
     CFG_t   _cfg;
@@ -176,7 +175,7 @@ class AFSK {
     inline void DAC(uint8_t sample);
     void txHandle();
     void rxHandle(int8_t sample);
-    void rxDecoder(uint8_t sample);
+    void rxDecoder(uint8_t bt);
 
 };
 
