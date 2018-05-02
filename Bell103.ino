@@ -21,77 +21,17 @@
 
 #include <util/atomic.h>
 
-#include "fifo.h"
+#include "afsk.h"
 
 //#define DEBUG
-//#define DEBUG_RX
-//#define DEBUG_RX_LVL
 
-// Use the PWM DAC (8 bits, one output PIN, uses Timer2) or
-// the resistor ladder (4 bits, 4 PINS)
-#define PWM_DAC
 
-// The PWM pin may be 3 or 11 (Timer2)
-#define PWM_PIN 3
 
-// CPU frequency correction for sampling timer
-#define F_COR (-120000L)
 
-// Sampling frequency
-#define F_SAMPLE    9600
-#define BAUD        300
-#define DATA_BITS   8
-#define STRT_BITS   1
-#define STOP_BITS   1
-#define CARR_BITS   240
-#define BIT_SAMPLES (F_SAMPLE / BAUD)
-
-// Mark and space bits
-enum BIT {SPACE, MARK, NONE};
-
-// Mark and space, TX and RX frequencies
-const uint16_t txSpce = 1070;  // 934uS  14953CPU
-const uint16_t txMark = 1270;  // 787uS  12598CPU
-const uint16_t rxSpce = 2025;  // 493uS   7901CPU
-const uint16_t rxMark = 2225;  // 449uS   7191CPU
-
-// Here are only the first quarter wave samples
-const uint8_t wvSmpl[] = {
-  0x80, 0x83, 0x86, 0x89, 0x8c, 0x8f, 0x92, 0x95,
-  0x98, 0x9b, 0x9e, 0xa2, 0xa5, 0xa7, 0xaa, 0xad,
-  0xb0, 0xb3, 0xb6, 0xb9, 0xbc, 0xbe, 0xc1, 0xc4,
-  0xc6, 0xc9, 0xcb, 0xce, 0xd0, 0xd3, 0xd5, 0xd7,
-  0xda, 0xdc, 0xde, 0xe0, 0xe2, 0xe4, 0xe6, 0xe8,
-  0xea, 0xeb, 0xed, 0xee, 0xf0, 0xf1, 0xf3, 0xf4,
-  0xf5, 0xf6, 0xf8, 0xf9, 0xfa, 0xfa, 0xfb, 0xfc,
-  0xfd, 0xfd, 0xfe, 0xfe, 0xfe, 0xff, 0xff, 0xff
-};
-
-// Count samples for quarter, half and full wave
-const uint8_t   wvPtsQart = sizeof(wvSmpl) / sizeof(*wvSmpl);
-const uint8_t   wvPtsHalf = wvPtsQart + wvPtsQart;
-const uint16_t  wvPtsFull = wvPtsHalf + wvPtsHalf;
-
-// Wave index steps for SPACE, MARK and NONE bits in TX
-const uint8_t wvStepTX[] = {
-  (wvPtsFull * (uint32_t)txSpce + F_SAMPLE / 2) / F_SAMPLE, // 29
-  (wvPtsFull * (uint32_t)txMark + F_SAMPLE / 2) / F_SAMPLE, // 34
-  0
-};
-
-// Wave index steps for SPACE, MARK and NONE bits in RX
-const uint8_t wvStepRX[] = {
-  (wvPtsFull * (uint32_t)rxSpce + F_SAMPLE / 2) / F_SAMPLE, // 54
-  (wvPtsFull * (uint32_t)rxMark + F_SAMPLE / 2) / F_SAMPLE, // 59
-  0
-};
-
-// States in RX and TX finite states machines
-enum TXRX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, WAIT};
 
 // Phase increments for SPACE and MARK in RX (fixed point arithmetics)
-const int32_t phSpceInc = (1L << 16) * rxSpce / F_SAMPLE;   // 13824
-const int32_t phMarkInc = (1L << 16) * rxMark / F_SAMPLE;   // 15189
+const int32_t phSpceInc = (1L << 16) * BELL103.frqAnsw[SPACE] / F_SAMPLE;   // 13824
+const int32_t phMarkInc = (1L << 16) * BELL103.frqAnsw[MARK] / F_SAMPLE;    // 15189
 const uint8_t logTau    = 4;                                // tau = 64 / SAMPLING_FREQ = 6.666 ms
 
 // Demodulated (I, Q) amplitudes for SPACE and Mark
@@ -101,34 +41,9 @@ volatile int16_t rxSpceI, rxSpceQ, rxMarkI, rxMarkQ;
 uint16_t pwSpce, pwMark;
 
 
-// Transmission related data
-struct TX_t {
-  uint8_t active  = 0;        // currently transmitting or not
-  uint8_t state   = WAIT;     // TX state (TXRX_STATE enum)
-  uint8_t dtbit   = MARK;     // currently transmitting data bit
-  uint8_t data    = 0;        // transmitting data bits, shift out, LSB first
-  uint8_t bits    = 0;        // counter of already transmitted bits
-  uint8_t idx     = 0;        // wave samples index (start with first sample)
-  uint8_t clk     = 0;        // samples counter for each bit
-} tx;
-
-// Receiving and decoding related data
-struct RX_t {
-  uint8_t active  = 0;        // currently receiving proper signals or not
-  uint8_t state   = WAIT;     // RX decoder state (TXRX_STATE enum)
-  uint8_t data    = 0;        // the received data bits, shift in, LSB first
-  uint8_t bits    = 0;        // counter of received data bits
-  uint8_t stream  = 0;        // last 8 decoded bit samples
-  uint8_t bitsum  = 0;        // sum of the last decoded bit samples
-  uint8_t clk     = 0;        // samples counter for each bit
-  int16_t iirX[2] = {0, 0};   // IIR Filter X cells
-  int16_t iirY[2] = {0, 0};   // IIR Filter Y cells
-} rx;
 
 // Modem configuration
-struct CFG_t {
-  uint8_t txCarrier: 1; // Keep a carrier going when transmitting
-} cfg;
+CFG_t cfg;
 
 #ifdef DEBUG_RX_LVL
 // Count input samples and get the minimum, maximum and input level
@@ -138,378 +53,16 @@ int8_t  inMax     = 0x80;
 uint8_t inLevel   = 0x00;
 #endif
 
-// FIFOs
-FIFO txFIFO(6);
-FIFO rxFIFO(6);
-FIFO delayFIFO(4);
+// Define the modem
+AFSK afsk;
 
 
 /**
-  Get an instant wave sample
-
-  @param idx the wave index (0..wvPtsFull-1)
-*/
-inline uint8_t wvSample(uint8_t idx) {
-  // Work on half wave
-  uint8_t hIdx = idx & 0x7F;
-  // Check if in second quarter wave
-  if (hIdx >= wvPtsQart)
-    // Descending slope
-    hIdx = wvPtsHalf - hIdx - 1;
-  // Get the value
-  uint8_t result = wvSmpl[hIdx];
-  // Check if in second half wave
-  if (idx >= wvPtsHalf)
-    // Under X axis
-    result = 0xFF - result;
-  return result;
-}
-
-/**
-  Send the sample to the DAC
-
-  @param sample the sample to output to DAC
-*/
-inline void txDAC(uint8_t sample) {
-#ifdef PWM_DAC
-  // Use the 8-bit PWM DAC
-#if PWM_PIN == 11
-  OCR2A = sample;
-#else
-  OCR2B = sample;
-#endif //PWM_PIN
-#else
-  // Use the 4-bit resistor ladder DAC
-  PORTD = (sample & 0xF0) | _BV(3);
-#endif //PWM_DAC
-}
-
-/**
-  TX workhorse.  This function is called by ISR for each output sample.
-  Immediately after starting, it gets the sample value and sends it to DAC.
-*/
-void txHandle() {
-  // First thing first: get the sample
-  uint8_t sample = wvSample(tx.idx);
-
-  // Check if we are transmitting
-  if (tx.active == 1 or cfg.txCarrier == 1) {
-    // Output the sample
-    txDAC(sample);
-    // Step up the index for the next sample
-    tx.idx += wvStepTX[tx.dtbit];
-
-    // Check if we have sent all samples for a bit
-    if (tx.clk++ >= BIT_SAMPLES) {
-      // Reset the samples counter
-      tx.clk  = 0;
-
-      // One bit finished, check the state and choose the next bit and state
-      switch (tx.state) {
-        // We have been offline, prepare the transmission
-        case WAIT:
-          tx.dtbit  = MARK;
-          // Get data from FIFO, if any
-          if (not txFIFO.empty()) {
-            tx.data   = txFIFO.out();
-            tx.state  = PREAMBLE;
-            tx.bits   = 0;
-          }
-          else
-            tx.state  = WAIT;
-          break;
-
-        // We are sending the preamble carrier
-        case PREAMBLE:
-          // Check if we have sent the carrier long enough
-          if (++tx.bits >= CARR_BITS) {
-            // Carrier sent, go to the start bit
-            tx.state  = START_BIT;
-            tx.dtbit  = SPACE;
-          }
-          break;
-
-        // We have sent the start bit, go on with data bits, LSB first
-        case START_BIT:
-          tx.state  = DATA_BIT;
-          tx.dtbit  = tx.data & 0x01;
-          tx.data   = tx.data >> 1;
-          tx.bits   = 0;
-          break;
-
-        // We are sending the data bits, keep sending until MSB
-        case DATA_BIT:
-          // Check if we have sent all the bits
-          if (++tx.bits < DATA_BITS) {
-            // Keep sending the data bits, LSB to MSB
-            tx.dtbit  = tx.data & 0x01;
-            tx.data   = tx.data >> 1;
-          }
-          else {
-            // We have sent all the data bits, go on with the stop bit
-            tx.state  = STOP_BIT;
-            tx.dtbit  = MARK;
-          }
-          break;
-
-        // We have sent the stop bit, try to get the next byte, if any
-        case STOP_BIT:
-          // Check the TX FIFO
-          if (txFIFO.empty()) {
-            // No more data to send, go on with the trail carrier
-            tx.state  = TRAIL;
-            tx.dtbit  = MARK;
-            tx.bits   = 0;
-          }
-          else {
-            // There is still data, get one byte and return to the start bit
-            tx.state  = START_BIT;
-            tx.dtbit  = SPACE;
-            tx.data   = txFIFO.out();
-          }
-          break;
-
-        // We are sending the trail carrier
-        case TRAIL:
-          // Check if we have sent the trail carrier long enough
-          if (++tx.bits > CARR_BITS) {
-            // Disable TX and go offline
-            tx.active = 0;
-            tx.state  = WAIT;
-            // TX led off
-            PORTB    &= ~_BV(PORTB1);
-          }
-          else if (tx.bits == CARR_BITS and cfg.txCarrier != 1) {
-            // After the last trail carrier bit, send isoelectric line
-            tx.dtbit  = NONE;
-            // Prepare for the future TX
-            tx.idx    = 0;
-            tx.clk    = 0;
-          }
-          // Still sending the trail carrier, check the TX FIFO again
-          else if (not txFIFO.empty()) {
-            // There is new data in FIFO, start over
-            tx.state  = START_BIT;
-            tx.dtbit  = SPACE;
-            tx.data   = txFIFO.out();
-          }
-          break;
-      }
-    }
-  }
-}
-
-/**
-  RX workhorse.  This function is called by ISR for each input sample.
-  It computes the power of the two RX signals, validates them and
-  compared to each other to figure out the data bit.
-  Then, it sends the data bit to decoder.
-
-  @param sample the (signed) sample
-*/
-void rxHandle(int8_t sample) {
-#ifdef DEBUG_RX_LVL
-  // Keep sample for level measurements
-  if (sample < inMin) inMin = sample;
-  if (sample > inMax) inMax = sample;
-  // Count 256 samples, which means 8 bits
-  if (++inSamples == 0x00) {
-    // Get the level
-    inLevel = inMax - inMin;
-    // Reset MIN and MAX
-    inMin = 0x7F;
-    inMax = 0x80;
-  }
-#endif
-
-  rx.iirX[0] = rx.iirX[1];
-  rx.iirX[1] = ((delayFIFO.out() - 128) * sample) >> 2;
-  //rx.iirX[1] = ((delayFIFO.out() - 128) * sample) >> 1;
-  rx.iirY[0] = rx.iirY[1];
-  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
-  //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] / 10);
-  delayFIFO.in(sample + 128);
-
-  // Validate the RX tones
-  rx.active = 1; //abs(rx.iirY[1] > 1);
-  if (rx.active) {
-    // Call the decoder
-    rxDecoder(((rx.iirY[1] > 0) ? MARK : SPACE));
-  }
-  else {
-    // Disable the decoder and clear all partially received data
-    rx.state  = WAIT;
-  }
-}
-
-/**
-  The RX data decoder.  It gets the decoded data bit and tries to figure out
-  the entire received byte.
-
-  @param sample the decoded data bit
-*/
-void rxDecoder(uint8_t sample) {
-  static uint8_t rxLed = 0;
-
-  // Keep the bitsum and bit stream
-  rx.bitsum  += sample;
-  rx.stream <<= 1;
-  rx.stream  |= sample;
-
-  // Count the received samples
-  rx.clk++;
-
-  // Check the RX decoder state
-  switch (rx.state) {
-    // Check each sample for a HIGH->LOW transition
-    case WAIT:
-      // Check the transition
-      if ((rx.stream & 0x03) == 0x02) {
-        // We have a transition, let's assume the start bit begins here,
-        // but we need a validation, which will be done in PREAMBLE state
-        rx.state  = PREAMBLE;
-        rx.clk    = 0;
-        rx.bitsum = 0;
-      }
-      break;
-
-    // Validate the start bit after half the samples have been collected
-    case PREAMBLE:
-      // Check if we have collected enough samples
-      if (rx.clk >= BIT_SAMPLES / 2) {
-        // Check the average level of decoded samples: less than a quarter of
-        // them may be HIGHs; the bitsum should be lesser than BIT_SAMPLES/8
-        if (rx.bitsum > BIT_SAMPLES / 8) {
-          // Too many HIGH, this is not a start bit, go offline
-          rx.state  = WAIT;
-          // RX led off
-          PORTB  &= ~_BV(PORTB0);
-        }
-        else {
-          // Could be a start bit, keep on going and check again at the end
-          rx.state  = START_BIT;
-          // RX led on
-          PORTB  |= _BV(PORTB0);
-        }
-      }
-      break;
-
-    // Other states than WAIT and PREAMBLE
-    default:
-      // Check if we have received all the samples required for a bit
-      if (rx.clk >= BIT_SAMPLES) {
-
-        // Check the RX decoder state
-        switch (rx.state) {
-          // We have received the start bit
-          case START_BIT:
-#ifdef DEBUG_RX
-            rxFIFO.in('S');
-            //rxFIFO.in((rx.bitsum > BIT_SAMPLES / 2) ? '#' : '_');
-            rxFIFO.in((rx.bitsum >> 2) + 'A');
-#endif
-            // Check the average level of decoded samples: less than a quarter
-            // of them may be HIGH, so, the bitsum should be lesser than
-            // BIT_SAMPLES/4
-            if (rx.bitsum > BIT_SAMPLES / 4) {
-              // Too many HIGHs, this is not a start bit
-              rx.state  = WAIT;
-              // RX led off
-              PORTB  &= ~_BV(PORTB0);
-            }
-            else {
-              // This is a start bit, go on to data bits
-              rx.state  = DATA_BIT;
-              rx.clk    = 0;
-              rx.bitsum = 0;
-              rx.bits   = 0;
-            }
-            break;
-
-          // We have received a data bit
-          case DATA_BIT:
-            // Keep received bits, LSB first
-            rx.data >>= 1;
-            // The received data bit value is the average of all decoded
-            // samples.  We count the HIGH samples, threshold at half
-            rx.data  |= rx.bitsum > BIT_SAMPLES / 2 ? 0x80 : 0x00;
-#ifdef DEBUG_RX
-            rxFIFO.in(47 + rx.bits);
-            //rxFIFO.in((rx.bitsum > BIT_SAMPLES / 2) ? '#' : '_');
-            rxFIFO.in((rx.bitsum >> 2) + 'A');
-#endif
-            // Check if we are still receiving the data bits
-            if (++rx.bits < DATA_BITS) {
-              // Prepare for a new bit
-              rx.clk    = 0;
-              rx.bitsum = 0;
-            }
-            else {
-              // Go on with the stop bit, count only half the samples
-              rx.state  = STOP_BIT;
-              rx.clk    = BIT_SAMPLES / 2;
-              rx.bitsum = 0;
-            }
-            break;
-
-          // We have received the stop bit
-          case STOP_BIT:
-            // Push the data into FIFO
-#ifdef DEBUG_RX
-            rxFIFO.in('T');
-            rxFIFO.in((rx.bitsum >> 2) + 'A');
-            rxFIFO.in(' ');
-#endif
-            if (rx.bitsum > BIT_SAMPLES / 4)
-              rxFIFO.in(rx.data);
-#ifdef DEBUG_RX
-            rxFIFO.in(10);
-#endif
-            // Start over again
-            rx.state  = WAIT;
-            // RX led off
-            PORTB  &= ~_BV(PORTB0);
-            break;
-        }
-      }
-  }
-}
-
-/**
-  Check the serial I/O and send the data to TX, respectively check the
-  RX data and send it to serial.
-*/
-void serialHandle() {
-  uint8_t c;
-  // Check any data on serial port
-  if (Serial.available() > 0) {
-    // There is data on serial port
-    if (not txFIFO.full()) {
-      // FIFO not full, we can send the data
-      c = Serial.read();
-      txFIFO.in(c);
-      // Keep transmitting
-      tx.active = 1;
-      // TX led on
-      PORTB |= _BV(PORTB1);
-    }
-  }
-
-  // Check if there is any data in RX FIFO
-  if (not rxFIFO.empty()) {
-    c = rxFIFO.out();
-    Serial.write(c);
-  }
-}
-
-/**
-  ADC Interrupt vector, called for each sample.
-  It calls both the TX and RX handlers.
+  ADC Interrupt vector, called for each sample, which calls both the handlers
 */
 ISR(ADC_vect) {
   TIFR1 = _BV(ICF1);
-  txHandle();
-  rxHandle(ADCH - 128);
+  afsk.handle();
 }
 
 /**
@@ -518,11 +71,6 @@ ISR(ADC_vect) {
 void setup() {
   Serial.begin(9600);
 
-  cli();
-  for (uint8_t i = 0; i < 8; i++)
-    delayFIFO.in(128);
-  sei();
-  //delayFIFO.in(128);
 
   // TC1 Control Register B: No prescaling, WGM mode 12
   TCCR1A = 0;
@@ -592,8 +140,14 @@ void setup() {
   // Leds
   DDRB |= _BV(PORTB1) | _BV(PORTB0);
 
+
   // Modem configuration
-  cfg.txCarrier = 1;
+  cfg.txCarrier = 1;  // Keep a carrier going when transmitting
+
+
+  // Define and configure the afsk
+  afsk.init(BELL103, cfg);
+
 }
 
 /**
@@ -601,7 +155,7 @@ void setup() {
 */
 void loop() {
 
-  serialHandle();
+  afsk.serialHandle();
 
 #ifdef DEBUG_RX_LVL
   static uint32_t next = millis();
@@ -614,8 +168,8 @@ void loop() {
   /*
     // Simulation
     static uint8_t rxIdx = 0;
-    rxHandle((wvSample(rxIdx) - 128) / 2);
-    rxIdx += wvStepRX[SPACE];
+    rxHandle((wave.sample(rxIdx) - 128) / 2);
+    rxIdx += BELL103.stpAnsw[SPACE];
   */
 
 #ifdef DEBUG
