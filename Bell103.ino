@@ -51,7 +51,7 @@ void setup() {
   Serial.begin(9600);
 
   // Modem configuration
-  cfg.txcarr = 1;  // Keep a carrier going when transmitting
+  cfg.txcarr = 0;  // Keep a carrier going when transmitting
 
   afsk.online = 1;
 

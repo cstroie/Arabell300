@@ -61,10 +61,6 @@ void AFSK::initSteps() {
   for (uint8_t b = SPACE; b <= MARK; b++) {
     _afsk.stpOrig[b] = (wave.full * (uint32_t)_afsk.frqOrig[b] + F_SAMPLE / 2) / F_SAMPLE;
     _afsk.stpAnsw[b] = (wave.full * (uint32_t)_afsk.frqAnsw[b] + F_SAMPLE / 2) / F_SAMPLE;
-    Serial.println(_afsk.stpOrig[b]);
-    Serial.println(_afsk.frqOrig[b]);
-    Serial.println(_afsk.stpAnsw[b]);
-    Serial.println(_afsk.frqOrig[b]);
   }
 }
 
@@ -170,7 +166,7 @@ void AFSK::txHandle() {
     // Output the sample
     DAC(sample);
     // Step up the index for the next sample
-    tx.idx += BELL103.stpOrig[tx.dtbit];
+    tx.idx += _afsk.stpOrig[tx.dtbit];
 
     // Check if we have sent all samples for a bit
     if (tx.clk++ >= BIT_SAMPLES) {
@@ -515,6 +511,6 @@ void AFSK::serialHandle() {
 void AFSK::handle() {
   if (online) {
     this->txHandle();
-    this->rxHandle(ADC - bias);
+    this->rxHandle(ADCH - bias);
   }
 }
