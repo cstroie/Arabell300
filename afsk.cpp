@@ -28,6 +28,47 @@ FIFO rxFIFO(6);
 FIFO delayFIFO(4);
 
 AFSK::AFSK() {
+}
+
+AFSK::~AFSK() {
+}
+
+/**
+  Initialize the AFSK modem
+
+  @param x the afsk modem type
+*/
+void AFSK::init(AFSK_t afskMode, CFG_t *cfg) {
+  _afsk = afskMode;
+  _cfg  = cfg;
+  this->initSteps();
+
+  cli();
+  for (uint8_t i = 0; i < 8; i++)
+    delayFIFO.in(bias);
+  sei();
+
+  // Hardware init
+  this->initHW();
+}
+
+/**
+  Compute the originating and answering samples steps
+
+  @param x the afsk modem to compute for
+*/
+void AFSK::initSteps() {
+  for (uint8_t b = SPACE; b <= MARK; b++) {
+    _afsk.stpOrig[b] = (wave.full * (uint32_t)_afsk.frqOrig[b] + F_SAMPLE / 2) / F_SAMPLE;
+    _afsk.stpAnsw[b] = (wave.full * (uint32_t)_afsk.frqAnsw[b] + F_SAMPLE / 2) / F_SAMPLE;
+    Serial.println(_afsk.stpOrig[b]);
+    Serial.println(_afsk.frqOrig[b]);
+    Serial.println(_afsk.stpAnsw[b]);
+    Serial.println(_afsk.frqOrig[b]);
+  }
+}
+
+void AFSK::initHW() {
   // TC1 Control Register B: No prescaling, WGM mode 12
   TCCR1A = 0;
   TCCR1B = _BV(CS10) | _BV(WGM13) | _BV(WGM12);
@@ -95,37 +136,6 @@ AFSK::AFSK() {
 
   // Leds
   DDRB |= _BV(PORTB1) | _BV(PORTB0);
-}
-
-AFSK::~AFSK() {
-}
-
-/**
-  Initialize the AFSK modem
-
-  @param x the afsk modem type
-*/
-void AFSK::init(AFSK_t afskMode, CFG_t *cfg) {
-  _afsk = afskMode;
-  _cfg  = cfg;
-  this->initSteps();
-
-  cli();
-  for (uint8_t i = 0; i < 8; i++)
-    delayFIFO.in(bias);
-  sei();
-}
-
-/**
-  Compute the originating and answering samples steps
-
-  @param x the afsk modem to compute for
-*/
-void AFSK::initSteps() {
-  for (uint8_t b = SPACE; b <= MARK; b++) {
-    _afsk.stpOrig[b] = (wave.full * (uint32_t)_afsk.frqOrig[b] + F_SAMPLE / 2) / F_SAMPLE;
-    _afsk.stpAnsw[b] = (wave.full * (uint32_t)_afsk.frqAnsw[b] + F_SAMPLE / 2) / F_SAMPLE;
-  }
 }
 
 /**

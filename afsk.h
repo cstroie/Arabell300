@@ -187,6 +187,7 @@ class AFSK {
 #endif
 
     inline void DAC(uint8_t sample);
+    void initHW();
     void txHandle();
     void rxHandle(int8_t sample);
     void rxDecoder(uint8_t bt);
