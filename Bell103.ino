@@ -31,6 +31,10 @@ CFG_t cfg;
 // Define the modem
 AFSK afsk;
 
+// The AT-Hayes interface
+#include "hayes.h"
+HAYES hayes(cfg);
+
 
 /**
   ADC Interrupt vector, called for each sample, which calls both the handlers
@@ -47,19 +51,21 @@ void setup() {
   Serial.begin(9600);
 
   // Modem configuration
-  cfg.txCarrier = 1;  // Keep a carrier going when transmitting
+  cfg.txcarr = 1;  // Keep a carrier going when transmitting
 
   // Define and configure the afsk
   afsk.init(BELL103, cfg);
-
 }
 
 /**
   Main Arduino loop
 */
 void loop() {
-  // Check the serial port
-  afsk.serialHandle();
+  // Check the serial port and handle data or command mode
+  if (afsk.online)
+    afsk.serialHandle();
+  else
+    hayes.handle();
 
 #ifdef DEBUG_RX_LVL
   static uint32_t next = millis();

@@ -155,6 +155,8 @@ static AFSK_t RTTY = {
 class AFSK {
   public:
 
+    uint8_t online = 0;     // If on-line, the modem works in data mode, else in command mode
+    
 #ifdef DEBUG_RX_LVL
     // Get the input level
     uint8_t inLevel   = 0x00;

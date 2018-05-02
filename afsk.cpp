@@ -156,7 +156,7 @@ void AFSK::txHandle() {
   uint8_t sample = wave.sample(tx.idx);
 
   // Check if we are transmitting
-  if (tx.active == 1 or _cfg.txCarrier == 1) {
+  if (tx.active == 1 or _cfg.txcarr == 1) {
     // Output the sample
     DAC(sample);
     // Step up the index for the next sample
@@ -242,7 +242,7 @@ void AFSK::txHandle() {
             // TX led off
             PORTB    &= ~_BV(PORTB1);
           }
-          else if (tx.bits == CARR_BITS and _cfg.txCarrier != 1) {
+          else if (tx.bits == CARR_BITS and _cfg.txcarr != 1) {
             // After the last trail carrier bit, send isoelectric line
             tx.dtbit  = NONE;
             // Prepare for the future TX
@@ -469,6 +469,8 @@ void AFSK::serialHandle() {
   Handle both the TX and RX
 */
 void AFSK::handle() {
-  this->txHandle();
-  this->rxHandle(ADC - bias);
+  if (online) {
+    this->txHandle();
+    this->rxHandle(ADC - bias);
+  }
 }
