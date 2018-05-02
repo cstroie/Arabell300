@@ -20,7 +20,6 @@
 #ifndef AFSK_H
 #define AFSK_H
 
-
 //#define DEBUG_RX
 //#define DEBUG_RX_LVL
 
@@ -155,6 +154,12 @@ static AFSK_t RTTY = {
 
 class AFSK {
   public:
+
+#ifdef DEBUG_RX_LVL
+    // Get the input level
+    uint8_t inLevel   = 0x00;
+#endif
+
     AFSK();
     ~AFSK();
 
@@ -171,6 +176,13 @@ class AFSK {
 
     TX_t tx;
     RX_t rx;
+
+#ifdef DEBUG_RX_LVL
+    // Count input samples and get the minimum, maximum and input level
+    uint8_t inSamples = 0;
+    int8_t  inMin     = 0x7F;
+    int8_t  inMax     = 0x80;
+#endif
 
     inline void DAC(uint8_t sample);
     void txHandle();

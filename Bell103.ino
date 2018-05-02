@@ -28,14 +28,6 @@
 // Modem configuration
 CFG_t cfg;
 
-#ifdef DEBUG_RX_LVL
-// Count input samples and get the minimum, maximum and input level
-uint8_t inSamples = 0;
-int8_t  inMin     = 0x7F;
-int8_t  inMax     = 0x80;
-uint8_t inLevel   = 0x00;
-#endif
-
 // Define the modem
 AFSK afsk;
 
@@ -54,79 +46,8 @@ ISR(ADC_vect) {
 void setup() {
   Serial.begin(9600);
 
-
-  // TC1 Control Register B: No prescaling, WGM mode 12
-  TCCR1A = 0;
-  TCCR1B = _BV(CS10) | _BV(WGM13) | _BV(WGM12);
-  // Top set for 9600 baud
-  ICR1 = ((F_CPU + F_COR) / F_SAMPLE) - 1;
-
-  // Vcc with external capacitor at AREF pin, ADC Left Adjust Result
-  ADMUX = _BV(REFS0) | _BV(ADLAR);
-
-  // Analog input A0
-  // Port C Data Direction Register
-  DDRC  &= ~_BV(0);
-  // Port C Data Register
-  PORTC &= ~_BV(0);
-  // Digital Input Disable Register 0
-  DIDR0 |= _BV(0);
-
-  // Timer/Counter1 Capture Event
-  ADCSRB = _BV(ADTS2) | _BV(ADTS1) | _BV(ADTS0);
-  // ADC Enable, ADC Start Conversion, ADC Auto Trigger Enable,
-  // ADC Interrupt Enable, ADC Prescaler 16
-  ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADATE) | _BV(ADIE) | _BV(ADPS2);
-
-
-#ifdef PWM_DAC
-  // Set up Timer 2 to do pulse width modulation on the PWM PIN
-  // Use internal clock (datasheet p.160)
-  ASSR &= ~(_BV(EXCLK) | _BV(AS2));
-
-  // Set fast PWM mode  (p.157)
-  TCCR2A |= _BV(WGM21) | _BV(WGM20);
-  TCCR2B &= ~_BV(WGM22);
-
-#if PWM_PIN == 11
-  // Configure the PWM PIN 11 (PB3)
-  PORTB &= ~(_BV(PORTB3));
-  DDRD  |= _BV(PORTD3);
-  // Do non-inverting PWM on pin OC2A (p.155)
-  // On the Arduino this is pin 11.
-  TCCR2A = (TCCR2A | _BV(COM2A1)) & ~_BV(COM2A0);
-  TCCR2A &= ~(_BV(COM2B1) | _BV(COM2B0));
-  // No prescaler (p.158)
-  TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
-  // Set initial pulse width to the first sample, progresively
-  for (uint8_t i = 0; i <= wvSmpl[0]; i++)
-    OCR2A  = i;
-#else
-  // Configure the PWM PIN 3 (PD3)
-  PORTD &= ~(_BV(PORTD3));
-  DDRD  |= _BV(PORTD3);
-  // Do non-inverting PWM on pin OC2B (p.155)
-  // On the Arduino this is pin 3.
-  TCCR2A = (TCCR2A | _BV(COM2B1)) & ~_BV(COM2B0);
-  TCCR2A &= ~(_BV(COM2A1) | _BV(COM2A0));
-  // No prescaler (p.158)
-  TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
-  // Set initial pulse width to the first sample, progresively
-  for (uint8_t i = 0; i <= wvSmpl[0]; i++)
-    OCR2B  = i;
-#endif // PWM_PIN
-#else
-  // Configure resistor ladder DAC
-  DDRD |= 0xF8;
-#endif
-
-  // Leds
-  DDRB |= _BV(PORTB1) | _BV(PORTB0);
-
-
   // Modem configuration
   cfg.txCarrier = 1;  // Keep a carrier going when transmitting
-
 
   // Define and configure the afsk
   afsk.init(BELL103, cfg);
@@ -137,13 +58,13 @@ void setup() {
   Main Arduino loop
 */
 void loop() {
-
+  // Check the serial port
   afsk.serialHandle();
 
 #ifdef DEBUG_RX_LVL
   static uint32_t next = millis();
   if (millis() > next) {
-    Serial.println(inLevel);
+    Serial.println(afsk.inLevel);
     next += 8 * 1000 / BAUD;
   }
 #endif

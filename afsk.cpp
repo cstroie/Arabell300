@@ -28,6 +28,73 @@ FIFO rxFIFO(6);
 FIFO delayFIFO(4);
 
 AFSK::AFSK() {
+  // TC1 Control Register B: No prescaling, WGM mode 12
+  TCCR1A = 0;
+  TCCR1B = _BV(CS10) | _BV(WGM13) | _BV(WGM12);
+  // Top set for 9600 baud
+  ICR1 = ((F_CPU + F_COR) / F_SAMPLE) - 1;
+
+  // Vcc with external capacitor at AREF pin, ADC Left Adjust Result
+  ADMUX = _BV(REFS0) | _BV(ADLAR);
+
+  // Analog input A0
+  // Port C Data Direction Register
+  DDRC  &= ~_BV(0);
+  // Port C Data Register
+  PORTC &= ~_BV(0);
+  // Digital Input Disable Register 0
+  DIDR0 |= _BV(0);
+
+  // Timer/Counter1 Capture Event
+  ADCSRB = _BV(ADTS2) | _BV(ADTS1) | _BV(ADTS0);
+  // ADC Enable, ADC Start Conversion, ADC Auto Trigger Enable,
+  // ADC Interrupt Enable, ADC Prescaler 16
+  ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADATE) | _BV(ADIE) | _BV(ADPS2);
+
+
+#ifdef PWM_DAC
+  // Set up Timer 2 to do pulse width modulation on the PWM PIN
+  // Use internal clock (datasheet p.160)
+  ASSR &= ~(_BV(EXCLK) | _BV(AS2));
+
+  // Set fast PWM mode  (p.157)
+  TCCR2A |= _BV(WGM21) | _BV(WGM20);
+  TCCR2B &= ~_BV(WGM22);
+
+#if PWM_PIN == 11
+  // Configure the PWM PIN 11 (PB3)
+  PORTB &= ~(_BV(PORTB3));
+  DDRD  |= _BV(PORTD3);
+  // Do non-inverting PWM on pin OC2A (p.155)
+  // On the Arduino this is pin 11.
+  TCCR2A = (TCCR2A | _BV(COM2A1)) & ~_BV(COM2A0);
+  TCCR2A &= ~(_BV(COM2B1) | _BV(COM2B0));
+  // No prescaler (p.158)
+  TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
+  // Set initial pulse width to the first sample, progresively
+  for (uint8_t i = 0; i <= wvSmpl[0]; i++)
+    OCR2A  = i;
+#else
+  // Configure the PWM PIN 3 (PD3)
+  PORTD &= ~(_BV(PORTD3));
+  DDRD  |= _BV(PORTD3);
+  // Do non-inverting PWM on pin OC2B (p.155)
+  // On the Arduino this is pin 3.
+  TCCR2A = (TCCR2A | _BV(COM2B1)) & ~_BV(COM2B0);
+  TCCR2A &= ~(_BV(COM2A1) | _BV(COM2A0));
+  // No prescaler (p.158)
+  TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
+  // Set initial pulse width to the first sample, progresively
+  for (uint8_t i = 0; i <= wvSmpl[0]; i++)
+    OCR2B  = i;
+#endif // PWM_PIN
+#else
+  // Configure resistor ladder DAC
+  DDRD |= 0xF8;
+#endif
+
+  // Leds
+  DDRB |= _BV(PORTB1) | _BV(PORTB0);
 }
 
 AFSK::~AFSK() {
@@ -45,9 +112,8 @@ void AFSK::init(AFSK_t afskMode, CFG_t cfg) {
 
   cli();
   for (uint8_t i = 0; i < 8; i++)
-    delayFIFO.in(128);
+    delayFIFO.in(bias);
   sei();
-  //delayFIFO.in(128);
 }
 
 /**
@@ -249,9 +315,9 @@ void AFSK::rxDecoder(uint8_t bt) {
   static uint8_t rxLed = 0;
 
   // Keep the bitsum and bit stream
-  rx.bitsum  += sample;
+  rx.bitsum  += bt;
   rx.stream <<= 1;
-  rx.stream  |= sample;
+  rx.stream  |= bt;
 
   // Count the received samples
   rx.clk++;
