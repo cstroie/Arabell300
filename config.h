@@ -32,7 +32,8 @@ const char DATE[]     PROGMEM = __DATE__;
 struct CFG_t {
   union {
     struct {
-      uint8_t txcarr: 1;  // Keep a carrier going when transmitting
+      uint8_t compro: 8;  // ATB Select Communication Protocol
+      uint8_t txcarr: 1;  // ATC Keep a carrier going when transmitting
       uint8_t font: 4;  // Display font
       uint8_t brgt: 4;  // Display brightness (manual)
       uint8_t mnbr: 4;  // Minimal display brightness (auto)

@@ -19,7 +19,7 @@
 
 #include "hayes.h"
 
-HAYES::HAYES(CFG_t cfg): _cfg(cfg) {
+HAYES::HAYES(CFG_t cfg, AFSK afsk): _cfg(cfg), _afsk(afsk) {
 }
 
 HAYES::~HAYES() {
@@ -161,21 +161,11 @@ int8_t HAYES::getValidDigit(char* buf, int8_t idx, int8_t low, int8_t hgh, int8_
 
 
 uint8_t HAYES::handle() {
-  // String buffer
-  char buf[35] = "";
-  // Line buffer length
-  int8_t len = -1;
-  // Buffer index
-  uint8_t idx = 0;
-  // Numeric value
-  int8_t value = 0;
-  // Command result
-  bool result = false;
   // Start by finding the 'AT' sequence
-  // TODO allow for lowercase 'at'
   if (Serial.find("AT")) {
-    // Read until newline, no more than 32 chararcters
-    len = Serial.readBytesUntil('\r', buf, 32);
+    // Read until newline, no more than 40 chararcters, and make sure
+    // if ends with null byte
+    len = Serial.readBytesUntil('\r', buf, 40);
     buf[len] = '\0';
     // Uppercase
     while (buf[idx++])
@@ -188,6 +178,49 @@ uint8_t HAYES::handle() {
     idx = 0;
     // Check the first character, could be a symbol or a letter
     switch (buf[idx++]) { // idx++ -> 1
+
+      // ATB Select Communication Protocol
+      case 'B':
+        if (buf[idx] == '?') {
+          // Get communication protocol
+          Serial.print(F("B: ")); Serial.println(_cfg.compro);
+          result = true;
+        }
+        else {
+          // Get the integer value
+          value = getValidInteger(buf, idx, 0, 31, HAYES_NUM_ERROR);
+          if (value != HAYES_NUM_ERROR) {
+            _cfg.compro = value;
+            // Change the protocol
+            //_afsk.setProtocol();
+            result = true;
+          }
+        }
+        break;
+
+      // ATC Transmit carrier
+      case 'C':
+        if (buf[idx] == '?') {
+          // Get local echo
+          Serial.print(F("C: ")); Serial.println(_cfg.txcarr);
+          result = true;
+        }
+        else if (len == idx) {
+          _cfg.txcarr = 0x00;
+          result = true;
+        }
+        else {
+          // Get the digit value
+          value = getValidDigit(buf, idx, 0, 1, HAYES_NUM_ERROR);
+          if (value != HAYES_NUM_ERROR) {
+            // Set echo on or off
+            _cfg.txcarr = value;
+            result = true;
+          }
+        }
+        break;
+
+
       // ATE Set local echo
       case 'E':
         if (buf[idx] == '?') {
@@ -215,24 +248,47 @@ uint8_t HAYES::handle() {
           uint8_t rqInfo = 0x00;
           if (len == idx or buf[idx] == '0') {
             // Display all info
-            rqInfo = 0x03;
+            rqInfo = 0x01;
             result = true;
           }
           else {
             // Get the digit value
-            value = getValidDigit(buf, idx, 1, 7, HAYES_NUM_ERROR);
+            value = getValidDigit(buf, idx, 0, 7, HAYES_NUM_ERROR);
             if (value != HAYES_NUM_ERROR) {
               // Specify the line to display
-              rqInfo = 0x01 << (value - 1);
+              rqInfo = 0x01 << value;
               result = true;
             }
           }
           if (result) {
-            if (rqInfo & 0x01) print_P(DEVNAME, true);  rqInfo = rqInfo >> 1;
-            if (rqInfo & 0x01) print_P(VERSION, true);  rqInfo = rqInfo >> 1;
-            if (rqInfo & 0x01) print_P(AUTHOR,  true);  rqInfo = rqInfo >> 1;
-            if (rqInfo & 0x01) print_P(DATE,    true);  rqInfo = rqInfo >> 1;
-            if (rqInfo & 0x01) Serial.println(_cfg.crc8, 16);  rqInfo = rqInfo >> 1;
+            // 0 Modem model and speed
+            if (rqInfo & 0x01)
+              print_P(DEVNAME, true);
+            rqInfo = rqInfo >> 1;
+            // 1 ROM checksum
+            if (rqInfo & 0x01)
+              Serial.println(_cfg.crc8, 16);
+            rqInfo = rqInfo >> 1;
+            // 2 Tests ROM checksum THEN reports it
+            if (rqInfo & 0x01)
+              Serial.println(_cfg.crc8, 16);
+            rqInfo = rqInfo >> 1;
+            // 3 Firmware revision level.
+            if (rqInfo & 0x01) {
+              print_P(VERSION, true);
+              print_P(DATE,    true);
+            }
+            rqInfo = rqInfo >> 1;
+            // 4 Data connection info
+            rqInfo = rqInfo >> 1;
+            // 5 Regional Settings
+            rqInfo = rqInfo >> 1;
+            // 6 Data connection info
+            rqInfo = rqInfo >> 1;
+            // 7 Manufacturer and model info
+            if (rqInfo & 0x01)
+              print_P(AUTHOR,  true);
+            rqInfo = rqInfo >> 1;
           }
         }
         break;
@@ -276,6 +332,28 @@ uint8_t HAYES::handle() {
           if (value != HAYES_NUM_ERROR) {
             // Set speaker on or off mode
             _cfg.spkm = value;
+            result = true;
+          }
+        }
+        break;
+
+      // ATO Return to data mode
+      case 'O':
+        if (buf[idx] == '?') {
+          // Get online mode
+          Serial.print(F("O: ")); Serial.println(_afsk.online);
+          result = true;
+        }
+        else if (len == idx) {
+          _afsk.online = 0x01;
+          result = true;
+        }
+        else {
+          // Get the digit value
+          value = getValidDigit(buf, idx, 0, 1, HAYES_NUM_ERROR);
+          if (value != HAYES_NUM_ERROR) {
+            // Set online mode
+            _afsk.online = 0x01;
             result = true;
           }
         }

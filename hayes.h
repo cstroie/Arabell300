@@ -28,10 +28,11 @@
 #include <avr/wdt.h>
 
 #include "config.h"
+#include "afsk.h"
 
 class HAYES {
   public:
-    HAYES(CFG_t cfg);
+    HAYES(CFG_t cfg, AFSK afsk);
     ~HAYES();
 
     int16_t getInteger(char* buf, int8_t idx, uint8_t len = 32);
@@ -44,6 +45,19 @@ class HAYES {
 
   private:
     CFG_t _cfg;
+    AFSK  _afsk;
+
+    // String buffer
+    char buf[45];
+    // Line buffer length
+    int8_t len = -1;
+    // Buffer index
+    uint8_t idx = 0;
+    // Numeric value
+    int8_t value = 0;
+    // Command result
+    bool result = false;
+
 };
 
 #endif /* HAYES_H */

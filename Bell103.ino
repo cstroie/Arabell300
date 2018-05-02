@@ -33,7 +33,7 @@ AFSK afsk;
 
 // The AT-Hayes interface
 #include "hayes.h"
-HAYES hayes(cfg);
+HAYES hayes(cfg, afsk);
 
 
 /**
