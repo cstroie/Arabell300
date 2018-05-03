@@ -454,23 +454,22 @@ void AFSK::serialHandle() {
   static uint32_t escFirst = 0;
   static uint32_t escLast = 0;
 
+  // Check if we saw "+++"
   if (escCount == 3) {
     if (millis() - escLast > 1000) {
       // This is it, break
       online = 0;
+      escCount = 0;
     }
-    else {
-      if (Serial.available() > 0) {
-        escCount = 0;
-      }
-    }
+    else if (Serial.available() > 0)
+      escCount = 0;
   }
 
   // Check any data on serial port
   if (Serial.available() > 0) {
     // Check for +++ escape sequence
     if (Serial.peek() == '+') {
-      // Check when we saw the first
+      // Check when we saw the first '+'
       if (millis() - escFirst > 1000) {
         // This is the first
         escCount = 1;
