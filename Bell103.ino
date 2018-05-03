@@ -53,7 +53,7 @@ void setup() {
   // Modem configuration
   cfg.txcarr = 0;  // Keep a carrier going when transmitting
 
-  afsk.online = 1;
+  afsk.online = 0;
 
   // Define and configure the afsk
   afsk.init(BELL103, &cfg);
