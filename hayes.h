@@ -20,6 +20,9 @@
 #ifndef HAYES_H
 #define HAYES_H
 
+// Maximum input buffer size
+#define MAX_INPUT_SIZE 65
+
 // Several Hayes related globals
 #define HAYES_NUM_ERROR -128
 
@@ -37,27 +40,34 @@ class HAYES {
 
     int16_t getInteger(char* buf, int8_t idx, uint8_t len = 32);
     int16_t getValidInteger(char* buf, int8_t idx, int16_t low, int16_t hgh, int16_t def = 0, uint8_t len = 32);
+    int16_t getValidInteger(int16_t low, int16_t hgh, int16_t def = 0, uint8_t len = 32);
     int8_t  getDigit(char* buf, int8_t idx);
+    int8_t  getDigit(int8_t def = HAYES_NUM_ERROR);
     int8_t  getValidDigit(char* buf, int8_t idx, int8_t low, int8_t hgh, int8_t def = HAYES_NUM_ERROR);
+    int8_t  getValidDigit(int8_t low, int8_t hgh, int8_t def = HAYES_NUM_ERROR);
 
 
     uint8_t handle();
+    void    dispatch();
 
   private:
     CFG_t *_cfg;
     AFSK  *_afsk;
 
-    // String buffer
-    char buf[45];
+    // Input buffer
+    char buf[MAX_INPUT_SIZE];
     // Line buffer length
-    int8_t len = -1;
+    int8_t len = 0;
     // Buffer index
     uint8_t idx = 0;
     // Numeric value
     int8_t value = 0;
-    // Command result
-    bool result = false;
 
+    // The result status of the last command
+    uint8_t cmdResult = 0;
+
+    void    cmdPrint(char cmd, uint8_t value);
+    void    cmdPrint(uint8_t value);
 };
 
 #endif /* HAYES_H */

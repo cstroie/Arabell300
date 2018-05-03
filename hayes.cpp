@@ -110,12 +110,25 @@ int16_t HAYES::getInteger(char* buf, int8_t idx, uint8_t len = 32) {
   @param len maximum to parse, 0 for no limit
   @return the integer value or default
 */
-int16_t HAYES::getValidInteger(char* buf, int8_t idx, int16_t low, int16_t hgh, int16_t def = 0, uint8_t len = 32) {
+int16_t HAYES::getValidInteger(char* buf, int8_t idx, int16_t low, int16_t hgh, int16_t def = 0, uint8_t len) {
   // Get the integer value
   int16_t res = getInteger(buf, idx, len);
   // Check if valid
   if ((res < low) or (res > hgh))
     res = def;
+  // Return the result
+  return res;
+}
+
+int16_t HAYES::getValidInteger(int16_t low, int16_t hgh, int16_t def = 0, uint8_t len) {
+  cmdResult = 1;
+  // Get the integer value
+  int16_t res = getInteger(buf, idx, len);
+  // Check if valid
+  if ((res < low) or (res > hgh)) {
+    res = def;
+    cmdResult = 0;
+  }
   // Return the result
   return res;
 }
@@ -130,11 +143,32 @@ int16_t HAYES::getValidInteger(char* buf, int8_t idx, int16_t low, int16_t hgh, 
 int8_t HAYES::getDigit(char* buf, int8_t idx) {
   // The result is signed integer
   int8_t res = HAYES_NUM_ERROR;
-  // Make sure the pointed char is a digit and get the numeric value
-  if (isdigit(buf[idx]))
+  // Check the pointed char
+  if ((buf[idx] == '\0') or (buf[idx] == ' '))
+    // If it is the last char ('\0') or space (' '), the value is zero
+    res = 0;
+  else if (isdigit(buf[idx]))
+    // If it is a digit, get the numeric value
     res = buf[idx] - '0';
   // Return the result
   return res;
+}
+
+int8_t HAYES::getDigit(int8_t def) {
+  // The result is signed integer
+  int8_t value = def;
+  cmdResult = 1;
+  // Check the pointed char
+  if ((buf[idx] == '\0') or (buf[idx] == ' '))
+    // If it is the last char ('\0') or space (' '), the value is zero
+    value = 0;
+  else if (isdigit(buf[idx]))
+    // If it is a digit, get the numeric value
+    value = buf[idx] - '0';
+  else
+    cmdResult = 0;
+  // Return the resulting value
+  return value;
 }
 
 /**
@@ -148,9 +182,9 @@ int8_t HAYES::getDigit(char* buf, int8_t idx) {
   @param def default value
   @return the digit value or default
 */
-int8_t HAYES::getValidDigit(char* buf, int8_t idx, int8_t low, int8_t hgh, int8_t def = HAYES_NUM_ERROR) {
+int8_t HAYES::getValidDigit(char* buf, int8_t idx, int8_t low, int8_t hgh, int8_t def) {
   // Get the digit value
-  int8_t res = getDigit(buf, idx);;
+  int8_t res = getDigit(buf, idx);
   // Check if valid
   if ((res != HAYES_NUM_ERROR) and
       ((res < low) or (res > hgh)))
@@ -159,108 +193,90 @@ int8_t HAYES::getValidDigit(char* buf, int8_t idx, int8_t low, int8_t hgh, int8_
   return res;
 }
 
+int8_t HAYES::getValidDigit(int8_t low, int8_t hgh, int8_t def) {
+  // Get the digit value
+  int8_t res = getDigit(def);
+  // Check if valid
+  if ((cmdResult != 0) and ((res < low) or (res > hgh))) {
+    res = def;
+    cmdResult = 0;
+  }
+  // Return the result
+  return res;
+}
 
-uint8_t HAYES::handle() {
+void HAYES::cmdPrint(char cmd, uint8_t value) {
+  // Print the value
+  Serial.print(cmd); Serial.print(F(": ")); Serial.println(value);
+  cmdResult = 1;
+}
+
+void HAYES::cmdPrint(uint8_t value) {
+  // Print the value
+  cmdPrint(buf[idx - 1], value);
+}
+
+void HAYES::dispatch() {
+  // Reset the command result
+  cmdResult = 0;
+
   // Start by finding the 'AT' sequence
-  if (Serial.find("AT")) {
-    // Read until newline, no more than 40 chararcters, and make sure
-    // if ends with null byte
-    len = Serial.readBytesUntil('\r', buf, 40);
-    buf[len] = '\0';
-    // Uppercase
-    while (buf[idx++])
-      buf[idx] = toupper(buf[idx]);
-    // Local terminal echo
-    if (_cfg->echo) {
-      Serial.print(F("AT")); Serial.println(buf);
-    }
-    // Reset the buffer index
-    idx = 0;
+  char *pch = strstr_P(buf, PSTR("AT"));
+  if (pch != NULL) {
+    // Jump over those two chars from the start
+    idx = buf - pch + 2;
+
     // Check the first character, could be a symbol or a letter
     switch (buf[idx++]) { // idx++ -> 1
 
+      // ATA Answer incomming call
+      case 'A':
+        // TODO
+        break;
+
       // ATB Select Communication Protocol
       case 'B':
-        if (buf[idx] == '?') {
-          // Get communication protocol
-          Serial.print(F("B: ")); Serial.println(_cfg->compro);
-          result = true;
-        }
+        if (buf[idx] == '?')
+          cmdPrint(_cfg->compro);
         else {
-          // Get the integer value
-          value = getValidInteger(buf, idx, 0, 31, HAYES_NUM_ERROR);
-          if (value != HAYES_NUM_ERROR) {
-            _cfg->compro = value;
+          _cfg->compro = getValidInteger(0, 31, _cfg->compro);
+          if (cmdResult) {
             // Change the protocol
             //_afsk.setProtocol();
-            result = true;
           }
         }
         break;
 
       // ATC Transmit carrier
       case 'C':
-        if (buf[idx] == '?') {
-          // Get local echo
-          Serial.print(F("C: ")); Serial.println(_cfg->txcarr);
-          result = true;
-        }
-        else if (len == idx) {
-          _cfg->txcarr = 0x00;
-          result = true;
-        }
-        else {
-          // Get the digit value
-          value = getValidDigit(buf, idx, 0, 1, HAYES_NUM_ERROR);
-          if (value != HAYES_NUM_ERROR) {
-            // Set echo on or off
-            _cfg->txcarr = value;
-            result = true;
-          }
-        }
+        if (buf[idx] == '?')
+          cmdPrint(_cfg->txcarr);
+        else
+          _cfg->txcarr = getValidDigit(0, 1, _cfg->txcarr);
         break;
-
 
       // ATE Set local echo
       case 'E':
-        if (buf[idx] == '?') {
-          // Get local echo
-          Serial.print(F("E: ")); Serial.println(_cfg->echo);
-          result = true;
-        }
-        else if (len == idx) {
-          _cfg->echo = 0x00;
-          result = true;
-        }
-        else {
-          // Get the digit value
-          value = getValidDigit(buf, idx, 0, 1, HAYES_NUM_ERROR);
-          if (value != HAYES_NUM_ERROR) {
-            // Set echo on or off
-            _cfg->echo = value;
-            result = true;
-          }
-        }
+        if (buf[idx] == '?')
+          cmdPrint(_cfg->echo);
+        else
+          _cfg->echo = getValidDigit(0, 1, _cfg->echo);
+        break;
+
+      // ATH Hook control
+      case 'H':
+        // TODO
         break;
 
       // ATI Show info
       case 'I': {
           uint8_t rqInfo = 0x00;
-          if (len == idx or buf[idx] == '0') {
-            // Display all info
-            rqInfo = 0x01;
-            result = true;
-          }
-          else {
-            // Get the digit value
-            value = getValidDigit(buf, idx, 0, 7, HAYES_NUM_ERROR);
-            if (value != HAYES_NUM_ERROR) {
-              // Specify the line to display
-              rqInfo = 0x01 << value;
-              result = true;
-            }
-          }
-          if (result) {
+          // Get the digit value
+          uint8_t value = getValidDigit(0, 7, 0);
+          if (cmdResult) {
+            // Specify the line to display
+            rqInfo = 0x01 << value;
+
             // 0 Modem model and speed
             if (rqInfo & 0x01)
               print_P(DEVNAME, true);
@@ -295,113 +311,100 @@ uint8_t HAYES::handle() {
 
       // ATL Set speaker volume level
       case 'L':
-        if (buf[idx] == '?') {
-          // Get speaker volume level
-          Serial.print(F("L: ")); Serial.println(_cfg->spkl);
-          result = true;
-        }
-        else if (len == idx) {
-          _cfg->spkl = 0x00;
-          result = true;
-        }
-        else {
-          // Get the digit value
-          value = getValidDigit(buf, idx, 0, 3, HAYES_NUM_ERROR);
-          if (value != HAYES_NUM_ERROR) {
-            // Set speaker volume
-            _cfg->spkl = value;
-            result = true;
-          }
-        }
+        if (buf[idx] == '?')
+          cmdPrint(_cfg->spklvl);
+        else
+          _cfg->spklvl = getValidDigit(0, 3, _cfg->spklvl);
         break;
 
       // ATM Speaker control
       case 'M':
-        if (buf[idx] == '?') {
-          // Get speaker mode
-          Serial.print(F("M: ")); Serial.println(_cfg->spkm);
-          result = true;
-        }
-        else if (len == idx) {
-          _cfg->spkm = 0x00;
-          result = true;
-        }
-        else {
-          // Get the digit value
-          value = getValidDigit(buf, idx, 0, 3, HAYES_NUM_ERROR);
-          if (value != HAYES_NUM_ERROR) {
-            // Set speaker on or off mode
-            _cfg->spkm = value;
-            result = true;
-          }
-        }
+        if (buf[idx] == '?')
+          cmdPrint(_cfg->spkmod);
+        else
+          _cfg->spkmod = getValidDigit(0, 3, _cfg->spkmod);
         break;
 
       // ATO Return to data mode
       case 'O':
-        if (buf[idx] == '?') {
-          // Get online mode
-          Serial.print(F("O: ")); Serial.println(_afsk->online);
-          result = true;
-        }
-        else if (len == idx) {
-          _afsk->online = 0x01;
-          result = true;
-        }
-        else {
-          // Get the digit value
-          value = getValidDigit(buf, idx, 0, 1, HAYES_NUM_ERROR);
-          if (value != HAYES_NUM_ERROR) {
-            // Set online mode
-            _afsk->online = 0x01;
-            result = true;
-          }
-        }
+        _afsk->online = getValidDigit(0, 1, 0) + 1;
         break;
 
       // ATQ Quiet Mode
       case 'Q':
-        if (buf[idx] == '?') {
-          // Get quiet mode
-          Serial.print(F("Q: ")); Serial.println(_cfg->scqt);
-          result = true;
-        }
-        else if (len == idx) {
-          _cfg->scqt = 0x00;
-          result = true;
-        }
-        else {
-          // Get the digit value
-          value = getValidDigit(buf, idx, 0, 1, HAYES_NUM_ERROR);
-          if (value != HAYES_NUM_ERROR) {
-            // Set console quiet mode off or on
-            _cfg->scqt = value;
-            result = true;
-          }
-        }
+        if (buf[idx] == '?')
+          cmdPrint(_cfg->quiet);
+        else
+          _cfg->quiet = getValidDigit(0, 1, _cfg->quiet);
+        break;
+
+      // ATV Verbose mode
+      case 'V':
+        if (buf[idx] == '?')
+          cmdPrint(_cfg->verbos);
+        else
+          _cfg->verbos = getValidDigit(0, 1, _cfg->verbos);
+        break;
+
+      // ATX Select call progress method
+      case 'X':
+        if (buf[idx] == '?')
+          cmdPrint(_cfg->selcpm);
+        else
+          _cfg->selcpm = getValidDigit(0, 1, _cfg->selcpm);
         break;
 
       // ATZ Reset
       case 'Z':
         wdt_enable(WDTO_2S);
         // Wait for the prescaller time to expire
-        // without sending the reset signal by using
-        // the wdt_reset() method
+        // without sending the reset signal
         while (true);
         break;
 
       default:
-        result = (len == 0);
+        // Return OK if the command is just 'AT'
+        cmdResult = (len == 0);
     }
 
-
-    // Last response line
-    if (len >= 0) {
-      if (result) Serial.println(F("OK"));
-      else        Serial.println(F("ERROR"));
+  }
+}
 
 
-      Serial.flush();
+uint8_t HAYES::handle() {
+  char c;
+  // Read from serial only if there is room in buffer
+  if (len < MAX_INPUT_SIZE - 1) {
+    c = Serial.read();
+    // Check if we have a valid character
+    if (c >= 0) {
+      // Uppercase
+      c = toupper(c);
+      // Local terminal echo
+      if (_cfg->echo)
+        Serial.print(c);
+      // Append to buffer
+      buf[len++] = c;
+      // Check for EOL
+      if (c == '\r' or c == '\n') {
+        Serial.print("\r\n");
+        // Check the next character
+        c = Serial.peek();
+        // If newline, consume it
+        if (c == '\r' or c == '\n')
+          Serial.read();
+        // Make sure the last char is null
+        buf[len - 1] = '\0';
+        // Parse the line
+        dispatch();
+        // Check the line length before reporting
+        if (len >= 0) {
+          if (cmdResult)  Serial.println(F("OK"));
+          else            Serial.println(F("ERROR"));
+        }
+        // Reset the buffer length
+        len = 0;
+      }
     }
   }
 }
