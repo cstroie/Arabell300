@@ -18,6 +18,8 @@
 */
 
 #include "afsk.h"
+#include "dsp.h"
+
 
 // The wave generator
 WAVE wave;
@@ -26,6 +28,7 @@ WAVE wave;
 FIFO txFIFO(6);
 FIFO rxFIFO(6);
 FIFO delayFIFO(4);
+
 
 AFSK::AFSK() {
 }
@@ -293,10 +296,12 @@ void AFSK::rxHandle(int8_t sample) {
 
   rx.iirX[0] = rx.iirX[1];
   rx.iirX[1] = ((delayFIFO.out() - 128) * sample) >> 2;
-  //rx.iirX[1] = ((delayFIFO.out() - 128) * sample) >> 1;
+  //rx.iirX[1] = ((delayFIFO.out() - 128) * sample) / 4;
+
   rx.iirY[0] = rx.iirY[1];
   rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
-  //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] / 10);
+  //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] / 1.2);
+
   delayFIFO.in(sample + 128);
 
   // Validate the RX tones
@@ -513,3 +518,39 @@ void AFSK::handle() {
     this->rxHandle(ADCH - bias);
   }
 }
+
+void AFSK::simFeed() {
+  static HMDYNE hm1(1270, 9600);
+  static HMDYNE hm0(1070, 9600);
+
+  // Simulation
+  static uint8_t idx = 0;
+  uint8_t bt = (millis() / 1000) % 2;
+
+  int8_t x = wave.sample(idx) - 128;
+
+  /*
+    int8_t y = bs2225(x);
+    Serial.print(lp200(((int16_t)x * x) >> 8));
+    Serial.print(",");
+    Serial.println(lp200(((int16_t)y * y) >> 8));
+  */
+
+  Serial.print(hm0.getPower(x));
+  Serial.print(",");
+  Serial.println(hm1.getPower(x));
+
+  rxHandle(x);
+  idx += _afsk.stpOrig[bt];
+}
+
+void AFSK::simPrint() {
+  static uint32_t next = millis();
+  if (false and millis() > next) {
+    Serial.print(rx.iirX[1]);
+    Serial.print(",");
+    Serial.println(rx.iirY[1]);
+    next += 100;
+  }
+}
+

@@ -23,7 +23,7 @@
 
 #include "afsk.h"
 
-//#define DEBUG
+#define DEBUG
 
 // Modem configuration
 CFG_t cfg;
@@ -41,7 +41,9 @@ HAYES hayes(&cfg, &afsk);
 */
 ISR(ADC_vect) {
   TIFR1 = _BV(ICF1);
+#ifndef DEBUG
   afsk.handle();
+#endif
 }
 
 /**
@@ -77,18 +79,8 @@ void loop() {
   }
 #endif
 
-  /*
-    // Simulation
-    static uint8_t rxIdx = 0;
-    rxHandle((wave.sample(rxIdx) - 128) / 2);
-    rxIdx += BELL103.stpAnsw[SPACE];
-  */
-
 #ifdef DEBUG
-  static uint32_t next = millis();
-  if (millis() > next) {
-    Serial.print(rx.iirX[1]); Serial.print(" "); Serial.println(rx.iirY[1]);
-    next += 100;
-  }
+  afsk.simFeed();
+  afsk.simPrint();
 #endif
 }

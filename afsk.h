@@ -49,6 +49,7 @@
 #include "fifo.h"
 #include "wave.h"
 
+#include "hmdyne.h"
 
 
 // Mark and space bits
@@ -169,6 +170,10 @@ class AFSK {
     void initSteps();
     void handle();
     void serialHandle();
+
+    // Simulation
+    void simFeed();
+    void simPrint();
 
   private:
     AFSK_t  _afsk;
