@@ -75,6 +75,17 @@ uint8_t FIFO::len() {
   return result;
 }
 
+uint8_t FIFO::_clear() {
+  i_in  = 0;
+  i_out = 0;
+}
+
+uint8_t FIFO::clear() {
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    this->_clear();
+  }
+}
+
 uint8_t FIFO::_in(uint8_t x) {
   if (not this->_full()) {
     buf[i_in] = x;
