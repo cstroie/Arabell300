@@ -118,7 +118,6 @@ uint8_t FIFO::out() {
   return result;
 }
 
-
 uint8_t FIFO::_peek() {
   return buf[i_out];
 }

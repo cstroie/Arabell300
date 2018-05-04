@@ -15,6 +15,17 @@
 
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  Copyright (c) 2018 MicroModeler.
+
+  A non-exclusive, nontransferable, perpetual, royalty-free license is granted to the Licensee to
+  use the following Information for academic, non-profit, or government-sponsored research purposes.
+  Use of the following Information under this License is restricted to NON-COMMERCIAL PURPOSES ONLY.
+  Commercial use of the following Information requires a separately executed written license agreement.
+
+  This Information is distributed WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 */
 
 #ifndef DSP_H
@@ -32,8 +43,8 @@ int8_t bs2225(int8_t x0) {
                 a1 =  15,
                 a2 = -62;
 
-  static int16_t acc;
-  static int8_t w1, w2;
+  int16_t acc;
+  int8_t w1, w2;
 
   // Run feedback part of filter
   acc  = (int16_t)w2 * a2;
@@ -66,8 +77,8 @@ int8_t lp200(int8_t x0) {
                 a1 = 111,
                 a2 = -49;
 
-  static int16_t acc;
-  static int8_t w1, w2;
+  int16_t acc;
+  int8_t w1, w2;
 
   // Run feedback part of filter
   acc  = (int16_t)w2 * a2;
@@ -101,8 +112,8 @@ int8_t lp600(int8_t x0) {
                 a1 = 37,
                 a2 = 0;
 
-  static int16_t acc;
-  static int8_t w1, w2;
+  int16_t acc;
+  int8_t w1, w2;
 
   // Run feedback part of filter
   acc  = (int16_t)w2 * a2;

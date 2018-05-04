@@ -45,5 +45,3 @@ uint8_t WAVE::sample(uint8_t idx) {
     result = 0xFF - result;
   return result;
 }
-
-

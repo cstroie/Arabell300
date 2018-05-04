@@ -15,6 +15,15 @@
 
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  For a detailed explanation, see http://arduino.stackexchange.com/a/21175
+
+  Copyright (c) 2016 Edgar Bonet Orozco.
+  Released under the terms of the MIT license:
+  https://opensource.org/licenses/MIT
+
+  https://gist.githubusercontent.com/edgar-bonet/0b03735d70366bc05fc6/raw/a93d9b09f1008db83b5232641d33cca3b387237d/homodyne.ino
 */
 
 #include "hmdyne.h"
@@ -32,13 +41,13 @@ uint16_t HMDYNE::getPower(uint8_t sample) {
   int8_t x, y;
 
   // Update the phase of the local oscillator
-  phase += _phInc;
+  _phase += _phInc;
   // Multiply the sample by square waves in quadrature
   x = sample;
-  if (((phase >> 8) + 0x00) & 0x80)
+  if (((_phase >> 8) + 0x00) & 0x80)
     x = -1 - x;
   y = sample;
-  if (((phase >> 8) + 0x40) & 0x80)
+  if (((_phase >> 8) + 0x40) & 0x80)
     y = -1 - y;
   // First order low-pass filter.
   I += x - (I >> logTau);
