@@ -20,9 +20,6 @@
 #include "wave.h"
 
 WAVE::WAVE() {
-  qart = sizeof(wvSmpl) / sizeof(*wvSmpl);
-  half = qart + qart;
-  full = half + half;
 }
 
 WAVE::~WAVE() {
@@ -31,7 +28,7 @@ WAVE::~WAVE() {
 /**
   Get an instant wave sample
 
-  @param idx the wave index (0..wvPtsFull-1)
+  @param idx the wave sample index
 */
 uint8_t WAVE::sample(uint8_t idx) {
   // Work on half wave
@@ -41,7 +38,7 @@ uint8_t WAVE::sample(uint8_t idx) {
     // Descending slope
     hIdx = half - hIdx - 1;
   // Get the value
-  uint8_t result = wvSmpl[hIdx];
+  uint8_t result = wavelut[hIdx];
   // Check if in second half wave
   if (idx >= half)
     // Under X axis

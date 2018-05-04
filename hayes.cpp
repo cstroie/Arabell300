@@ -327,7 +327,7 @@ void HAYES::dispatch() {
 
       // ATO Return to data mode
       case 'O':
-        _afsk->online = getValidDigit(0, 1, 0) + 1;
+        _afsk->dataMode = getValidDigit(0, 1, 0) + 1;
         break;
 
       // ATQ Quiet Mode

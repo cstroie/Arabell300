@@ -15,11 +15,13 @@
 
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+  Many thanks to:
+    Kamal Mostafa   https://github.com/kamalmostafa/minimodem
+    Mark Qvist      https://github.com/markqvist/MicroModemGP
 */
 
 #include "afsk.h"
-#include "dsp.h"
-
 
 // The wave generator
 WAVE wave;
@@ -27,7 +29,7 @@ WAVE wave;
 // FIFOs
 FIFO txFIFO(6);
 FIFO rxFIFO(6);
-FIFO delayFIFO(4);
+FIFO dyFIFO(4);
 
 
 AFSK::AFSK() {
@@ -41,18 +43,32 @@ AFSK::~AFSK() {
 
   @param x the afsk modem type
 */
-void AFSK::init(AFSK_t afskMode, CFG_t *cfg) {
-  _afsk = afskMode;
+void AFSK::init(AFSK_t afsk, CFG_t *cfg) {
   _cfg  = cfg;
-  this->initSteps();
-
-  cli();
-  for (uint8_t i = 0; i < 8; i++)
-    delayFIFO.in(bias);
-  sei();
-
   // Hardware init
   this->initHW();
+  // Set the modem type
+  this->setModemType(afsk);
+}
+
+/**
+  Set the modem type
+
+  @param afsk the afsk modem type
+*/
+void AFSK::setModemType(AFSK_t afsk) {
+  _afsk = afsk;
+  // Compute the wave index steps
+  this->initSteps();
+  // Start as originating
+  this->setDirection(ORIGINATING);
+  // Start in command mode
+  dataMode = false;
+  // Compute modem specific parameters
+  fulBit = F_SAMPLE / _afsk.baud;
+  hlfBit = fulBit >> 1;
+  qrtBit = hlfBit >> 1;
+  octBit = qrtBit >> 1;
 }
 
 /**
@@ -62,78 +78,91 @@ void AFSK::init(AFSK_t afskMode, CFG_t *cfg) {
 */
 void AFSK::initSteps() {
   for (uint8_t b = SPACE; b <= MARK; b++) {
-    _afsk.stpOrig[b] = (wave.full * (uint32_t)_afsk.frqOrig[b] + F_SAMPLE / 2) / F_SAMPLE;
-    _afsk.stpAnsw[b] = (wave.full * (uint32_t)_afsk.frqAnsw[b] + F_SAMPLE / 2) / F_SAMPLE;
+    _afsk.orig.step[b] = (wave.full * (uint32_t)_afsk.orig.freq[b] + F_SAMPLE / 2) / F_SAMPLE;
+    _afsk.answ.step[b] = (wave.full * (uint32_t)_afsk.answ.freq[b] + F_SAMPLE / 2) / F_SAMPLE;
   }
 }
 
+/**
+  Set the connection direction
+
+  @param dir connection direction ORIGINATING, ANSWERING
+*/
+void AFSK::setDirection(uint8_t dir) {
+  // Keep the direction
+  _dir = dir;
+  // Create TX/RX pointers to ORIGINATING/ANSWERING parameters
+  if (_dir == ORIGINATING) {
+    fsqTX = &_afsk.orig;
+    fsqRX = &_afsk.answ;
+  }
+  else {
+    fsqTX = &_afsk.answ;
+    fsqRX = &_afsk.orig;
+  }
+  // Prepare the delay queue for RX
+  dyFIFO.clear();
+  for (uint8_t i = 0; i < fsqRX->queuelen; i++)
+    dyFIFO.in(bias);
+}
+
+/**
+  Initialize the hardware
+*/
 void AFSK::initHW() {
   // TC1 Control Register B: No prescaling, WGM mode 12
   TCCR1A = 0;
   TCCR1B = _BV(CS10) | _BV(WGM13) | _BV(WGM12);
-  // Top set for 9600 baud
+  // Top set for F_SAMPLE
   ICR1 = ((F_CPU + F_COR) / F_SAMPLE) - 1;
 
-  // Vcc with external capacitor at AREF pin, ADC Left Adjust Result
+  // Vcc with external capacitor at AREF pin
+  // ADC Left Adjust Result
   ADMUX = _BV(REFS0) | _BV(ADLAR);
 
   // Analog input A0
-  // Port C Data Direction Register
-  DDRC  &= ~_BV(0);
-  // Port C Data Register
-  PORTC &= ~_BV(0);
-  // Digital Input Disable Register 0
-  DIDR0 |= _BV(0);
+  DDRC  &= ~_BV(0); // Port C Data Direction Register
+  PORTC &= ~_BV(0); // Port C Data Register
+  DIDR0 |=  _BV(0); // Digital Input Disable Register 0
 
   // Timer/Counter1 Capture Event
   ADCSRB = _BV(ADTS2) | _BV(ADTS1) | _BV(ADTS0);
   // ADC Enable, ADC Start Conversion, ADC Auto Trigger Enable,
-  // ADC Interrupt Enable, ADC Prescaler 16
+  // ADC Interrupt Enable, ADC Prescaler 16 (1MHz)
   ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADATE) | _BV(ADIE) | _BV(ADPS2);
 
-
-#ifdef PWM_DAC
-  // Set up Timer 2 to do pulse width modulation on the PWM PIN
-  // Use internal clock (datasheet p.160)
-  ASSR &= ~(_BV(EXCLK) | _BV(AS2));
-
-  // Set fast PWM mode  (p.157)
-  TCCR2A |= _BV(WGM21) | _BV(WGM20);
-  TCCR2B &= ~_BV(WGM22);
+  // Set up Timer 2 to do Pulse Width Modulation on PIN 3 or 11
+  ASSR    &= ~(_BV(EXCLK) | _BV(AS2));  // Use internal clock (p.160)
+  TCCR2A  |= _BV(WGM21)   | _BV(WGM20); // Set fast PWM mode  (p.157)
+  TCCR2B  &= ~_BV(WGM22);
 
 #if PWM_PIN == 11
   // Configure the PWM PIN 11 (PB3)
   PORTB &= ~(_BV(PORTB3));
   DDRD  |= _BV(PORTD3);
   // Do non-inverting PWM on pin OC2A (p.155)
-  // On the Arduino this is pin 11.
   TCCR2A = (TCCR2A | _BV(COM2A1)) & ~_BV(COM2A0);
   TCCR2A &= ~(_BV(COM2B1) | _BV(COM2B0));
   // No prescaler (p.158)
   TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
-  // Set initial pulse width to the first sample, progresively
-  for (uint8_t i = 0; i <= wvSmpl[0]; i++)
-    OCR2A  = i;
 #else
   // Configure the PWM PIN 3 (PD3)
   PORTD &= ~(_BV(PORTD3));
   DDRD  |= _BV(PORTD3);
   // Do non-inverting PWM on pin OC2B (p.155)
-  // On the Arduino this is pin 3.
   TCCR2A = (TCCR2A | _BV(COM2B1)) & ~_BV(COM2B0);
   TCCR2A &= ~(_BV(COM2A1) | _BV(COM2A0));
   // No prescaler (p.158)
   TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
-  // Set initial pulse width to the first sample, progresively
-  for (uint8_t i = 0; i <= wvSmpl[0]; i++)
-    OCR2B  = i;
-#endif // PWM_PIN
-#else
-  // Configure resistor ladder DAC
-  DDRD |= 0xF8;
 #endif
 
-  // Leds
+  // Set initial pulse width to the first sample, progresively
+  for (uint8_t i = 0; i <= wave.sample(0); i++) {
+    DAC(i);
+    delay(1);
+  }
+
+  // Configure the leds: RX PB0, TX PB1
   DDRB |= _BV(PORTB1) | _BV(PORTB0);
 }
 
@@ -143,22 +172,17 @@ void AFSK::initHW() {
   @param sample the sample to output to DAC
 */
 inline void AFSK::DAC(uint8_t sample) {
-#ifdef PWM_DAC
-  // Use the 8-bit PWM DAC
 #if PWM_PIN == 11
   OCR2A = sample;
 #else
   OCR2B = sample;
-#endif //PWM_PIN
-#else
-  // Use the 4-bit resistor ladder DAC
-  PORTD = (sample & 0xF0) | _BV(3);
-#endif //PWM_DAC
+#endif
 }
 
 /**
   TX workhorse.  This function is called by ISR for each output sample.
-  Immediately after starting, it gets the sample value and sends it to DAC.
+  First, it gets the sample value and sends it to DAC, then prepares
+  the next sample.
 */
 void AFSK::txHandle() {
   // First thing first: get the sample
@@ -169,39 +193,42 @@ void AFSK::txHandle() {
     // Output the sample
     DAC(sample);
     // Step up the index for the next sample
-    tx.idx += _afsk.stpOrig[tx.dtbit];
+    tx.idx += fsqTX->step[tx.dtbit];
 
     // Check if we have sent all samples for a bit
-    if (tx.clk++ >= BIT_SAMPLES) {
+    if (tx.clk++ >= fulBit) {
       // Reset the samples counter
-      tx.clk  = 0;
+      tx.clk = 0;
 
-      // One bit finished, check the state and choose the next bit and state
+      // One bit finished, choose the next bit and TX state
       switch (tx.state) {
         // We have been offline, prepare the transmission
         case WAIT:
+          // The carrier is MARK
           tx.dtbit  = MARK;
-          // Get data from FIFO, if any
+          // Check if there is data in FIFO
           if (not txFIFO.empty()) {
+            // Get one byte from FIFO
             tx.data   = txFIFO.out();
             tx.state  = PREAMBLE;
             tx.bits   = 0;
           }
           else
+            // No data in FIFO
             tx.state  = WAIT;
           break;
 
         // We are sending the preamble carrier
         case PREAMBLE:
           // Check if we have sent the carrier long enough
-          if (++tx.bits >= CARR_BITS) {
-            // Carrier sent, go to the start bit
+          if (++tx.bits >= carrier) {
+            // Carrier sent, go to the start bit (SPACE)
             tx.state  = START_BIT;
             tx.dtbit  = SPACE;
           }
           break;
 
-        // We have sent the start bit, go on with data bits, LSB first
+        // We have sent the start bit, go on with data bits
         case START_BIT:
           tx.state  = DATA_BIT;
           tx.dtbit  = tx.data & 0x01;
@@ -209,10 +236,10 @@ void AFSK::txHandle() {
           tx.bits   = 0;
           break;
 
-        // We are sending the data bits, keep sending until MSB
+        // We are sending the data bits, keep sending until the last
         case DATA_BIT:
           // Check if we have sent all the bits
-          if (++tx.bits < DATA_BITS) {
+          if (++tx.bits < _afsk.dtbits) {
             // Keep sending the data bits, LSB to MSB
             tx.dtbit  = tx.data & 0x01;
             tx.data   = tx.data >> 1;
@@ -228,13 +255,13 @@ void AFSK::txHandle() {
         case STOP_BIT:
           // Check the TX FIFO
           if (txFIFO.empty()) {
-            // No more data to send, go on with the trail carrier
+            // No more data to send, go on with the trail carrier (MARK)
             tx.state  = TRAIL;
             tx.dtbit  = MARK;
             tx.bits   = 0;
           }
           else {
-            // There is still data, get one byte and return to the start bit
+            // There is still data, get one byte and go to the start bit
             tx.state  = START_BIT;
             tx.dtbit  = SPACE;
             tx.data   = txFIFO.out();
@@ -244,16 +271,16 @@ void AFSK::txHandle() {
         // We are sending the trail carrier
         case TRAIL:
           // Check if we have sent the trail carrier long enough
-          if (++tx.bits > CARR_BITS) {
-            // Disable TX and go offline
+          if (++tx.bits > carrier) {
+            // Disable TX and wait
             tx.active = 0;
             tx.state  = WAIT;
             // TX led off
             PORTB    &= ~_BV(PORTB1);
           }
-          else if (tx.bits == CARR_BITS and _cfg->txcarr != 1) {
-            // After the last trail carrier bit, send isoelectric line
-            tx.dtbit  = NONE;
+          else if (tx.bits == carrier and _cfg->txcarr != 1) {
+            // After the last trail carrier bit, send nothing
+            tx.dtbit  = MARK;
             // Prepare for the future TX
             tx.idx    = 0;
             tx.clk    = 0;
@@ -272,14 +299,17 @@ void AFSK::txHandle() {
 }
 
 /**
-  RX workhorse.  This function is called by ISR for each input sample.
-  It computes the power of the two RX signals, validates them and
-  compared to each other to figure out the data bit.
+  RX workhorse.  Called by ISR for each input sample, it autocorrelates
+  the input samples for a delay queue tailored for MARK symbol,
+  low-passes the result and tries to to figure out the data bit.
   Then, it sends the data bit to decoder.
 
-  @param sample the (signed) sample
+  @param sample the (unsigned) sample
 */
-void AFSK::rxHandle(int8_t sample) {
+void AFSK::rxHandle(uint8_t sample) {
+  // Create the signed sample
+  int8_t ss = sample - bias;
+
 #ifdef DEBUG_RX_LVL
   // Keep sample for level measurements
   if (sample < inMin) inMin = sample;
@@ -289,43 +319,44 @@ void AFSK::rxHandle(int8_t sample) {
     // Get the level
     inLevel = inMax - inMin;
     // Reset MIN and MAX
-    inMin = 0x7F;
-    inMax = 0x80;
+    inMin = 0xFF;
+    inMax = 0x00;
   }
 #endif
 
+  // First order low-pass Chebyshev filter
+  //  300:   0.16272643677832518 0.6745471264433496
+  //  600:   0.28187392036298453 0.4362521592740309
+  //  1200:  0.4470595850866754  0.10588082982664918
+
   rx.iirX[0] = rx.iirX[1];
-  rx.iirX[1] = ((delayFIFO.out() - 128) * sample) >> 2;
-  //rx.iirX[1] = ((delayFIFO.out() - 128) * sample) / 4;
-
+  //  rx.iirX[1] = ((dyFIFO.out() - 128) * ss) >> 2;
+  rx.iirX[1] = ((dyFIFO.out() - 128) * ss) >> 3;
   rx.iirY[0] = rx.iirY[1];
-  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
-  //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] / 1.2);
+  //  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
+  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + ((rx.iirY[0] >> 4) * 15); // *0.9
 
-  delayFIFO.in(sample + 128);
+  // Keep the unsigned sample in delay FIFO
+  dyFIFO.in(sample);
 
-  // Validate the RX tones
-  rx.active = 1; //abs(rx.iirY[1] > 1);
-  if (rx.active) {
+  // TODO Validate the RX tones
+  rx.active = true; //abs(rx.iirY[1] > 1);
+  if (rx.active)
     // Call the decoder
-    rxDecoder(((rx.iirY[1] > 0) ? MARK : SPACE));
-  }
-  else {
-    // Disable the decoder and clear all partially received data
+    rxDecoder((rx.iirY[1] > 0) ? MARK : SPACE);
+  else
+    // Disable the decoder and wait
     rx.state  = WAIT;
-  }
 }
 
 /**
-  The RX data decoder.  It gets the decoded data bit and tries to figure out
-  the entire received byte.
+  The RX data decoder.  Receive the decoded data bit and try
+  to figure out the entire received byte.
 
   @param bt the decoded data bit
 */
 void AFSK::rxDecoder(uint8_t bt) {
-  static uint8_t rxLed = 0;
-
-  // Keep the bitsum and bit stream
+  // Keep the bitsum and the bit stream
   rx.bitsum  += bt;
   rx.stream <<= 1;
   rx.stream  |= bt;
@@ -350,46 +381,44 @@ void AFSK::rxDecoder(uint8_t bt) {
     // Validate the start bit after half the samples have been collected
     case PREAMBLE:
       // Check if we have collected enough samples
-      if (rx.clk >= BIT_SAMPLES / 2) {
-        // Check the average level of decoded samples: less than a quarter of
-        // them may be HIGHs; the bitsum should be lesser than BIT_SAMPLES/8
-        if (rx.bitsum > BIT_SAMPLES / 8) {
-          // Too many HIGH, this is not a start bit, go offline
+      if (rx.clk >= hlfBit) {
+        // Check the average level of decoded samples: less than a quarter
+        // of them may be HIGHs; the bitsum must be lesser than octBit
+        if (rx.bitsum > octBit) {
+          // Too many HIGH, this is not a start bit
           rx.state  = WAIT;
           // RX led off
-          PORTB  &= ~_BV(PORTB0);
+          PORTB    &= ~_BV(PORTB0);
         }
         else {
           // Could be a start bit, keep on going and check again at the end
           rx.state  = START_BIT;
           // RX led on
-          PORTB  |= _BV(PORTB0);
+          PORTB    |= _BV(PORTB0);
         }
       }
       break;
 
-    // Other states than WAIT and PREAMBLE
+    // Other states than WAIT and PREAMBLE (for each sample)
     default:
       // Check if we have received all the samples required for a bit
-      if (rx.clk >= BIT_SAMPLES) {
-
+      if (rx.clk >= fulBit) {
         // Check the RX decoder state
         switch (rx.state) {
           // We have received the start bit
           case START_BIT:
 #ifdef DEBUG_RX
             rxFIFO.in('S');
-            //rxFIFO.in((rx.bitsum > BIT_SAMPLES / 2) ? '#' : '_');
+            //rxFIFO.in(rx.bitsum > hlfBit) ? '#' : '_');
             rxFIFO.in((rx.bitsum >> 2) + 'A');
 #endif
             // Check the average level of decoded samples: less than a quarter
-            // of them may be HIGH, so, the bitsum should be lesser than
-            // BIT_SAMPLES/4
-            if (rx.bitsum > BIT_SAMPLES / 4) {
+            // of them may be HIGH, the bitsum must be lesser than qrtBit
+            if (rx.bitsum > qrtBit) {
               // Too many HIGHs, this is not a start bit
               rx.state  = WAIT;
               // RX led off
-              PORTB  &= ~_BV(PORTB0);
+              PORTB    &= ~_BV(PORTB0);
             }
             else {
               // This is a start bit, go on to data bits
@@ -402,39 +431,42 @@ void AFSK::rxDecoder(uint8_t bt) {
 
           // We have received a data bit
           case DATA_BIT:
-            // Keep received bits, LSB first
-            rx.data >>= 1;
+            // Keep the received bits, LSB first, shift right
+            rx.data = rx.data >> 1;
             // The received data bit value is the average of all decoded
             // samples.  We count the HIGH samples, threshold at half
-            rx.data  |= rx.bitsum > BIT_SAMPLES / 2 ? 0x80 : 0x00;
+            rx.data |= rx.bitsum > hlfBit ? 0x80 : 0x00;
 #ifdef DEBUG_RX
             rxFIFO.in(47 + rx.bits);
-            //rxFIFO.in((rx.bitsum > BIT_SAMPLES / 2) ? '#' : '_');
+            //rxFIFO.in(rx.bitsum > hlfBit ? '#' : '_');
             rxFIFO.in((rx.bitsum >> 2) + 'A');
 #endif
             // Check if we are still receiving the data bits
-            if (++rx.bits < DATA_BITS) {
-              // Prepare for a new bit
+            if (++rx.bits < _afsk.dtbits) {
+              // Prepare for a new bit: reset the clock and the bitsum
               rx.clk    = 0;
               rx.bitsum = 0;
             }
             else {
               // Go on with the stop bit, count only half the samples
               rx.state  = STOP_BIT;
-              rx.clk    = BIT_SAMPLES / 2;
+              rx.clk    = hlfBit;
               rx.bitsum = 0;
             }
             break;
 
-          // We have received the stop bit
+          // We have received the first half of the stop bit
           case STOP_BIT:
-            // Push the data into FIFO
 #ifdef DEBUG_RX
             rxFIFO.in('T');
             rxFIFO.in((rx.bitsum >> 2) + 'A');
             rxFIFO.in(' ');
 #endif
-            if (rx.bitsum > BIT_SAMPLES / 4)
+            // Check the average level of decoded samples: at least half
+            // of them must be HIGH, the bitsum must be more than qrtBit
+            // (remember we have only the first half of the stop bit)
+            if (rx.bitsum > qrtBit)
+              // Push the data into FIFO
               rxFIFO.in(rx.data);
 #ifdef DEBUG_RX
             rxFIFO.in(10);
@@ -442,7 +474,7 @@ void AFSK::rxDecoder(uint8_t bt) {
             // Start over again
             rx.state  = WAIT;
             // RX led off
-            PORTB  &= ~_BV(PORTB0);
+            PORTB    &= ~_BV(PORTB0);
             break;
         }
       }
@@ -450,47 +482,61 @@ void AFSK::rxDecoder(uint8_t bt) {
 }
 
 /**
-  Check the serial I/O and send the data to TX, respectively check the
-  RX data and send it to serial.
+  Check the serial I/O and transmit the data, respectively check
+  the received data and send it to the serial port.
 */
-void AFSK::serialHandle() {
+void AFSK::serial() {
+  // The charcter on the serial line
   uint8_t c;
-  static uint8_t escCount = 0;
+  // The escape characters counters
+  static uint8_t  escCount = 0;
   static uint32_t escFirst = 0;
-  static uint32_t escLast = 0;
+  static uint32_t escLast  = 0;
 
-  // Check if we saw "+++"
+  // Check if we saw the escape string "+++"
   if (escCount == 3) {
+    // We did, we did taw the escape string!
+    // Check for the guard silence
     if (millis() - escLast > 1000) {
-      // This is it, break
-      online = 0;
+      // This is it, go in command mode
+      dataMode = 0;
       escCount = 0;
     }
-    else if (Serial.available() > 0)
-      escCount = 0;
+    else if (Serial.available() > 0) {
+      // We saw the string recently, check if there is any
+      // other character on the line.
+      c = Serial.peek();
+      if (c == '\r' or c == '\n')
+        // Ignore CR and LF.
+        Serial.read();
+      else
+        // There is something else, ignore the escape string
+        escCount = 0;
+    }
   }
 
-  // Check any data on serial port
+  // Check if there iss any data on serial port
   if (Serial.available() > 0) {
-    // Check for +++ escape sequence
+    // Check for "+++" escape sequence
     if (Serial.peek() == '+') {
       // Check when we saw the first '+'
       if (millis() - escFirst > 1000) {
-        // This is the first
+        // This is the first, keep the time
         escCount = 1;
         escFirst = millis();
       }
       else {
-        // Count them
+        // Not the first, count them up until three
         escCount++;
         if (escCount == 3) {
-          // This is the last, keep the time
+          // This is the last, keep the time and go wait
+          // for the guard silence
           escLast = millis();
         }
       }
     }
 
-    // There is data on serial port
+    // There is data on serial port, process it normally
     if (not txFIFO.full()) {
       // FIFO not full, we can send the data
       c = Serial.read();
@@ -504,30 +550,31 @@ void AFSK::serialHandle() {
 
   // Check if there is any data in RX FIFO
   if (not rxFIFO.empty()) {
+    // Get the byte and send it to serial line
     c = rxFIFO.out();
     Serial.write(c);
   }
 }
 
 /**
-  Handle both the TX and RX
+  Handle both the TX and RX, if in data mode
 */
 void AFSK::handle() {
-  if (online) {
+  if (dataMode) {
     this->txHandle();
-    this->rxHandle(ADCH - bias);
+    this->rxHandle(ADCH);
   }
 }
 
+/**
+  Test case simulation: feed the RX demodulator
+*/
 void AFSK::simFeed() {
-  static HMDYNE hm1(1270, 9600);
-  static HMDYNE hm0(1070, 9600);
-
   // Simulation
   static uint8_t idx = 0;
   uint8_t bt = (millis() / 1000) % 2;
 
-  int8_t x = wave.sample(idx) - 128;
+  int8_t x = wave.sample(idx);
 
   /*
     int8_t y = bs2225(x);
@@ -536,21 +583,32 @@ void AFSK::simFeed() {
     Serial.println(lp200(((int16_t)y * y) >> 8));
   */
 
-  Serial.print(hm0.getPower(x));
-  Serial.print(",");
-  Serial.println(hm1.getPower(x));
+  /*
+    Serial.print(x);
+    Serial.print(",");
+    Serial.print(hm0.getPower(x));
+    Serial.print(",");
+    Serial.print(hm1.getPower(x));
+    Serial.print(",");
+    Serial.print(bt * 10);
+    Serial.println();
+  */
+
+  //Serial.println(idx);
 
   rxHandle(x);
-  idx += _afsk.stpOrig[bt];
+  idx += fsqRX->step[bt];
 }
 
+/**
+  Test case simulation: print demodulated data
+*/
 void AFSK::simPrint() {
   static uint32_t next = millis();
-  if (false and millis() > next) {
-    Serial.print(rx.iirX[1]);
-    Serial.print(",");
+  if (millis() > next) {
+    //Serial.print(rx.iirX[1]);
+    //Serial.print(",");
     Serial.println(rx.iirY[1]);
     next += 100;
   }
 }
-

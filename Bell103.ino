@@ -19,25 +19,26 @@
   Bell 103: 300 8N1
 */
 
+//#define DEBUG
+
 #include <util/atomic.h>
 
+#include "config.h"
 #include "afsk.h"
+#include "hayes.h"
 
-#define DEBUG
-
-// Modem configuration
+// Persistent modem configuration
 CFG_t cfg;
 
-// Define the modem
+// The modem and all its related runtime configuration
 AFSK afsk;
 
-// The AT-Hayes interface
-#include "hayes.h"
+// The AT-Hayes command interface
 HAYES hayes(&cfg, &afsk);
 
 
 /**
-  ADC Interrupt vector, called for each sample, which calls both the handlers
+  ADC Interrupt vector, called for each sample
 */
 ISR(ADC_vect) {
   TIFR1 = _BV(ICF1);
@@ -50,15 +51,18 @@ ISR(ADC_vect) {
   Main Arduino setup function
 */
 void setup() {
+  // Serial port configuration
+  // We really should use 300 baud...
   Serial.begin(9600);
 
-  // Modem configuration
-  cfg.txcarr = 0;  // Keep a carrier going when transmitting
-
-  afsk.online = 0;
+  // Runtime configuration
+  afsk.dataMode = 0;
 
   // Define and configure the afsk
   afsk.init(BELL103, &cfg);
+
+  // afsk.setDirection(ORIGINATING);
+  //afsk.setDirection(ANSWERING);
 }
 
 /**
@@ -66,8 +70,8 @@ void setup() {
 */
 void loop() {
   // Check the serial port and handle data or command mode
-  if (afsk.online)
-    afsk.serialHandle();
+  if (afsk.dataMode)
+    afsk.serial();
   else
     hayes.handle();
 

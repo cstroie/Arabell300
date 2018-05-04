@@ -30,7 +30,6 @@ HMDYNE::~HMDYNE() {
 
 uint16_t HMDYNE::getPower(uint8_t sample) {
   int8_t x, y;
-  static uint16_t phase;
 
   // Update the phase of the local oscillator
   phase += _phInc;

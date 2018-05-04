@@ -22,8 +22,8 @@
 
 #include <Arduino.h>
 
-// Here are the first quarter wave samples
-const uint8_t wvSmpl[] = {
+// The first quarter wave samples LUT
+const uint8_t wavelut[] = {
   0x80, 0x83, 0x86, 0x89, 0x8c, 0x8f, 0x92, 0x95,
   0x98, 0x9b, 0x9e, 0xa2, 0xa5, 0xa7, 0xaa, 0xad,
   0xb0, 0xb3, 0xb6, 0xb9, 0xbc, 0xbe, 0xc1, 0xc4,
@@ -36,14 +36,15 @@ const uint8_t wvSmpl[] = {
 
 class WAVE {
   public:
-    // Count the samples for quarter, half and full wave
-    uint16_t  full;
-    uint8_t   qart;
-    uint8_t   half;
+    // Samples count for quarter, half and full wave
+    uint8_t   qart = sizeof(wavelut) / sizeof(*wavelut);;
+    uint8_t   half = qart + qart;
+    uint16_t  full = half + half;
 
     WAVE();
     ~WAVE();
 
+    // Get the wave sample specified by index
     uint8_t sample(uint8_t idx);
 };
 

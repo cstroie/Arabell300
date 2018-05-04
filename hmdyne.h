@@ -39,6 +39,8 @@ class HMDYNE {
     uint16_t _frq;
     // Phase increment
     int32_t _phInc;
+    // Phase
+    uint16_t phase;
     // Demodulated (I, Q) amplitudes
     volatile int16_t I, Q;
 };

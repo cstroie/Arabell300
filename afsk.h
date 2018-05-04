@@ -15,6 +15,10 @@
 
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+  Many thanks to:
+    Kamal Mostafa   https://github.com/kamalmostafa/minimodem
+    Mark Qvist      https://github.com/markqvist/MicroModemGP
 */
 
 #ifndef AFSK_H
@@ -22,10 +26,6 @@
 
 //#define DEBUG_RX
 //#define DEBUG_RX_LVL
-
-// Use the PWM DAC (8 bits, one output PIN, uses Timer2) or
-// the resistor ladder (4 bits, 4 PINS)
-#define PWM_DAC
 
 // The PWM pin may be 3 or 11 (Timer2)
 #define PWM_PIN 3
@@ -35,28 +35,18 @@
 
 // Sampling frequency
 #define F_SAMPLE    9600
-#define BAUD        300
-#define DATA_BITS   8
-#define STRT_BITS   1
-#define STOP_BITS   1
-#define CARR_BITS   240
-#define BIT_SAMPLES (F_SAMPLE / BAUD)
-
 
 #include <Arduino.h>
-
 #include "config.h"
 #include "fifo.h"
 #include "wave.h"
 
-#include "hmdyne.h"
-
-
 // Mark and space bits
-enum BIT {SPACE, MARK, NONE};
+enum BIT {SPACE, MARK};
 // States in RX and TX finite states machines
-enum TXRX_STATE {PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, WAIT};
-
+enum TXRX_STATE {WAIT, PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL};
+// Connection direction
+enum DIRECTION {ORIGINATING, ANSWERING};
 
 // Transmission related data
 struct TX_t {
@@ -82,121 +72,175 @@ struct RX_t {
   int16_t iirY[2] = {0, 0};   // IIR Filter Y cells
 };
 
+// Frequencies, wave index steps, autocorrelation queue length
+struct AFSK_FSQ_t {
+  uint16_t  freq[2];  // Frequencies for SPACE and MARK
+  uint8_t   step[2];  // Wave index steps for SPACE and MARK
+  uint8_t   queuelen; // Autocorrelation queue length
+  uint8_t   polarity; // Symbol polarity for specified queue
+};
 
+// AFSK configuration structure
 struct AFSK_t {
-  uint16_t  frqOrig[2]; // Frequencies for originating
-  uint16_t  frqAnsw[2]; // Frequencies for answering
-  uint8_t   stpOrig[2]; // Wave index steps for originating
-  uint8_t   stpAnsw[2]; // Wave index steps for answering
-  uint16_t  baud;       // Baud rate
-  uint8_t   duplex;     // 0: HalfDuplex, 1: Duplex
+  AFSK_FSQ_t  orig;   // Data for originating
+  AFSK_FSQ_t  answ;   // Data for answering
+  uint16_t    baud;   // Baud rate
+  uint8_t     dtbits; // Data bits count
+  uint8_t     duplex; // 0: HalfDuplex, 1: Duplex
 };
 
-// Bell103 frequencies (Hz)
+
+// Bell103 configuration
 static AFSK_t BELL103 = {
-  {1070, 1270}, // 934uS  14953CPU, 787uS  12598CPU
-  {2025, 2225}, // 493uS   7901CPU, 449uS   7191CPU
-  {0, 0},
-  {0, 0},
+  {
+    {1070, 1270}, // 934uS  14953CPU, 787uS  12598CPU
+    {0, 0},
+    10, 0
+  },
+  {
+    {2025, 2225}, // 493uS   7901CPU, 449uS   7191CPU
+    {0, 0},
+    8,  0
+  },
   300,
+  8,
   1,
 };
 
-// V.21 frequencies (Hz)
+// V.21 configuration
 static AFSK_t V_21 = {
-  {1180,  980},
-  {1850, 1650},
-  {0, 0},
-  {0, 0},
+  {
+    {1180,  980},
+    {0, 0},
+    11, 0
+  },
+  {
+    {1850, 1650},
+    {0, 0},
+    7, 0
+  },
   300,
+  8,
   1,
 };
 
-// Bell202 frequencies (Hz)
+// Bell202 configuration
 static AFSK_t BELL202 = {
-  {2200, 1200},
-  {2200, 1200},
-  {0, 0},
-  {0, 0},
+  {
+    {2200, 1200},
+    {0, 0},
+    4, 0
+  },
+  {
+    {2200, 1200},
+    {0, 0},
+    4, 0
+  },
   1200,
+  8,
   0,
 };
 
-// V.23 Mode1 frequencies (Hz)
+// V.23 Mode1 configuration
 static AFSK_t V_23_M1 = {
-  {1700, 1300},
-  {1700, 1300},
+  {
+    {1700, 1300},
+    {0, 0},
+    8, 0
+  },
+  {
+    {1700, 1300},
+    {0, 0},
+    8, 0
+  },
   600,
+  8,
   0,
 };
 
-// V.23 Mode2 frequencies (Hz)
+// V.23 Mode2 configuration
 static AFSK_t V_23_M2 = {
-  {2100, 1300},
-  {2100, 1300},
-  {0, 0},
-  {0, 0},
+  {
+    {2100, 1300},
+    {0, 0},
+    4, 0,
+  },
+  {
+    {2100, 1300},
+    {0, 0},
+    4, 0,
+  },
   1200,
-  1,
+  8,
+  1
 };
 
-// RTTY frequencies (Hz)
+// RTTY configuration
 static AFSK_t RTTY = {
-  {2295, 2125},
-  {2295, 2125},
-  {0, 0},
-  {0, 0},
+  {
+    {2295, 2125},
+    {0, 0},
+    12, 0
+  },
+  {
+    {2295, 2125},
+    {0, 0},
+    12, 0,
+  },
   4545,
-  0,
+  5,
+  0
 };
-
-
 
 
 class AFSK {
   public:
-
-    uint8_t online = 0;     // If on-line, the modem works in data mode, else in command mode
+    uint8_t dataMode  = 0;      // Modem works in data mode or in command mode
+    uint8_t bias      = 0x80;   // Input line level bias
+    uint8_t carrier   = 240;    // Number of carrier bits to send in preamble and trail
 
 #ifdef DEBUG_RX_LVL
-    // Get the input level
-    uint8_t inLevel   = 0x00;
+    uint8_t inLevel   = 0x00;   // Get the input level
 #endif
 
     AFSK();
     ~AFSK();
 
-    void init(AFSK_t afskMode, CFG_t *cfg);
+    void init(AFSK_t afsk, CFG_t *cfg);
     void initSteps();
+    void setModemType(AFSK_t afsk);
+    void setDirection(uint8_t dir);
     void handle();
-    void serialHandle();
+    void serial();
 
-    // Simulation
-    void simFeed();
+    void simFeed();             // Simulation
     void simPrint();
 
   private:
     AFSK_t  _afsk;
-    CFG_t   *_cfg;
+    CFG_t  *_cfg;
 
-    uint8_t bias = 0x80;
+    uint8_t _dir = ORIGINATING;
+    uint8_t fulBit, hlfBit, qrtBit, octBit;
 
     TX_t tx;
     RX_t rx;
 
-#ifdef DEBUG_RX_LVL
-    // Count input samples and get the minimum, maximum and input level
-    uint8_t inSamples = 0;
-    int8_t  inMin     = 0x7F;
-    int8_t  inMax     = 0x80;
-#endif
+    AFSK_FSQ_t *fsqTX;
+    AFSK_FSQ_t *fsqRX;
 
     inline void DAC(uint8_t sample);
     void initHW();
     void txHandle();
-    void rxHandle(int8_t sample);
+    void rxHandle(uint8_t sample);
     void rxDecoder(uint8_t bt);
 
+#ifdef DEBUG_RX_LVL
+    // Count input samples and get the minimum, maximum and input level
+    uint8_t inSamples = 0;
+    uint8_t inMin     = 0xFF;
+    uint8_t inMax     = 0x00;
+#endif
 };
 
 #endif /* AFSK_H */
