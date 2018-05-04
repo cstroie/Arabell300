@@ -23,7 +23,7 @@
   Released under the terms of the MIT license:
   https://opensource.org/licenses/MIT
 
-  https://gist.githubusercontent.com/edgar-bonet/0b03735d70366bc05fc6/raw/a93d9b09f1008db83b5232641d33cca3b387237d/homodyne.ino
+  https://gist.github.com/edgar-bonet/0b03735d70366bc05fc6
 */
 
 #ifndef HMDYNE_H
