@@ -19,6 +19,8 @@
 
 #include "hayes.h"
 
+CFG ee;
+
 HAYES::HAYES(CFG_t *cfg, AFSK *afsk): _cfg(cfg), _afsk(afsk) {
 }
 
@@ -361,6 +363,35 @@ void HAYES::dispatch() {
         // without sending the reset signal
         while (true);
         break;
+
+      // Standard '&' extension
+      case '&':
+        switch (buf[idx++]) { // idx++ -> 2
+          // Factory defaults
+          case 'F':
+            //cmdResult = cfg.factory();
+            break;
+
+          // Show the configuration
+          case 'V':
+            Serial.print(F("E: "));   Serial.print(_cfg->echo); Serial.print(F("; "));
+            Serial.print(F("L: "));   Serial.print(_cfg->spklvl); Serial.print(F("; "));
+            Serial.print(F("M: "));   Serial.print(_cfg->spkmod); Serial.print(F("; "));
+            cmdResult = true;
+            break;
+
+          // Store the configuration
+          case 'W':
+            //cmdResult = cfgWriteEE();
+            break;
+
+          // Read the configuration
+          case 'Y':
+            cmdResult = ee.read(_cfg);
+            break;
+        }
+        break;
+
 
       default:
         // Return OK if the command is just 'AT'

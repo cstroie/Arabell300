@@ -21,10 +21,13 @@
 #define CONFIG_H
 
 #include <Arduino.h>
+// EEPROM
+#include <EEPROM.h>
+
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Bell103";
-const char VERSION[]  PROGMEM = "v2.13";
+const char VERSION[]  PROGMEM = "v2.17";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DATE[]     PROGMEM = __DATE__;
 
@@ -52,16 +55,30 @@ struct CFG_t {
       uint8_t bfst: 5;  // First hour to beep
       uint8_t blst: 5;  // Last hour to beep
     };
-    uint8_t data[8];    // We use 8 bytes in the structure
+    uint8_t data[32];   // We use 8 bytes in the structure
   };
   uint8_t crc8;         // CRC8
 };
+
+
 
 
 class CFG {
   public:
     CFG();
     ~CFG();
+
+    // EEPROM address to store the configuration to
+    uint16_t  eeAddress = 0x0080;
+
+
+    uint8_t CRC8(uint8_t inCrc, uint8_t inData);
+    uint8_t crc(CFG_t *cfg);
+    bool    equal(CFG_t *cfg1, CFG_t *cfg2);
+    bool    write(CFG_t *cfg);
+    bool    read(CFG_t *cfg, bool useDefaults = false);
+    bool    factory(CFG_t *cfg);
+
 };
 
 #endif /* CONFIG_H */
