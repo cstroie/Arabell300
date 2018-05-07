@@ -210,6 +210,7 @@ class AFSK {
     void initSteps();
     void setModemType(AFSK_t afsk);
     void setDirection(uint8_t dir);
+    void setOnline(uint8_t online);
     void handle();
     void serial();
 
@@ -220,6 +221,7 @@ class AFSK {
     AFSK_t  _afsk;
     CFG_t  *_cfg;
 
+    uint8_t _online = 0;     // OnHook / OffHook
     uint8_t _dir = ORIGINATING;
     uint8_t fulBit, hlfBit, qrtBit, octBit;
 

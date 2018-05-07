@@ -570,6 +570,17 @@ void AFSK::handle() {
 }
 
 /**
+  Set the online status
+
+  @param online online status
+*/
+void AFSK::setOnline(uint8_t online) {
+  // Keep the online status
+  _online = online;
+}
+
+
+/**
   Test case simulation: feed the RX demodulator
 */
 void AFSK::simFeed() {
