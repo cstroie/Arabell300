@@ -257,12 +257,20 @@ void HAYES::dispatch() {
           _cfg->txcarr = getValidDigit(0, 1, _cfg->txcarr);
         break;
 
-      // ATE Set local echo
+      // ATE Set local command mode echo
       case 'E':
         if (buf[idx] == '?')
-          cmdPrint(_cfg->echo);
+          cmdPrint(_cfg->cmecho);
         else
-          _cfg->echo = getValidDigit(0, 1, _cfg->echo);
+          _cfg->cmecho = getValidDigit(0, 1, _cfg->cmecho);
+        break;
+
+      // ATF Set local data mode echo
+      case 'F':
+        if (buf[idx] == '?')
+          cmdPrint(_cfg->dtecho);
+        else
+          _cfg->dtecho = getValidDigit(0, 1, _cfg->dtecho);
         break;
 
       // ATH Hook control
@@ -374,7 +382,7 @@ void HAYES::dispatch() {
 
           // Show the configuration
           case 'V':
-            Serial.print(F("E: "));   Serial.print(_cfg->echo); Serial.print(F("; "));
+            Serial.print(F("E: "));   Serial.print(_cfg->cmecho); Serial.print(F("; "));
             Serial.print(F("L: "));   Serial.print(_cfg->spklvl); Serial.print(F("; "));
             Serial.print(F("M: "));   Serial.print(_cfg->spkmod); Serial.print(F("; "));
             cmdResult = true;
@@ -411,8 +419,8 @@ uint8_t HAYES::handle() {
     if (c >= 0) {
       // Uppercase
       c = toupper(c);
-      // Local terminal echo
-      if (_cfg->echo)
+      // Local terminal command mode echo
+      if (_cfg->cmecho)
         Serial.print(c);
       // Append to buffer
       buf[len++] = c;

@@ -541,6 +541,9 @@ void AFSK::serial() {
       // FIFO not full, we can send the data
       c = Serial.read();
       txFIFO.in(c);
+      // Local data mode echo
+      if (_cfg->dtecho)
+        Serial.print(c);
       // Keep transmitting
       tx.active = 1;
       // TX led on

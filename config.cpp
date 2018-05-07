@@ -55,7 +55,7 @@ uint8_t CFG::CRC8(uint8_t inCrc, uint8_t inData) {
 uint8_t CFG::crc(CFG_t *cfg) {
   // Compute the CRC8 checksum of the data
   uint8_t crc8 = 0;
-  for (uint8_t i = 0; i < 31; i++)
+  for (uint8_t i = 0; i < cfgLen; i++)
     crc8 = this->CRC8(crc8, cfg->data[i]);
   return crc8;
 }
@@ -74,7 +74,7 @@ bool CFG::equal(CFG_t *cfg1, CFG_t *cfg2) {
     result = false;
   else
     // Compare the overlayed array of the two structures
-    for (uint8_t i = 0; i < 31; i++)
+    for (uint8_t i = 0; i < cfgLen; i++)
       if (cfg1->data[i] != cfg2->data[i])
         result = false;
   return result;
@@ -113,8 +113,15 @@ bool CFG::read(CFG_t *cfg, bool useDefaults = false) {
   // And compare with the read crc8 checksum
   Serial.println(cfgTemp.crc8);
   Serial.println(crc8);
-  if      (cfgTemp.crc8 == crc8);  //cfg = cfgTemp;
-  else if (useDefaults)           factory(cfg);
+  if (cfgTemp.crc8 == crc8) {
+    // Copy the temporary structure to configuration
+    for (uint8_t i = 0; i < cfgLen; i++)
+      cfg->data[i] = cfgTemp.data[i];
+    // Copy the crc8, too
+    cfg->crc8 = crc8;
+  }
+  else if (useDefaults)
+    factory(cfg);
   return (cfgTemp.crc8 == crc8);
 }
 
@@ -124,6 +131,6 @@ bool CFG::read(CFG_t *cfg, bool useDefaults = false) {
 bool CFG::factory(CFG_t *cfg) {
   cfg->spkmod = 0x01;
   cfg->spklvl = 0x01;
-  cfg->echo   = 0x01;
+  cfg->cmecho = 0x01;
 };
 
