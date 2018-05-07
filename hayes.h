@@ -33,6 +33,26 @@
 #include "config.h"
 #include "afsk.h"
 
+// Result codes
+enum RESULT_CODES {RC_OK, RC_CONNECT, RC_RING, RC_NO_CARRIER, RC_ERROR,
+                   RC_CONNECT_1200, RC_NO_DIALTONE, RC_BUSY, RC_NO_ANSWER,
+                   RC_NONE = 255
+                  };
+const char rcOK[]           PROGMEM = "OK";
+const char rcCONNECT[]      PROGMEM = "CONNECT";
+const char rcRING[]         PROGMEM = "RING";
+const char rcNO_CARRIER[]   PROGMEM = "NO CARRIER";
+const char rcERROR[]        PROGMEM = "ERROR";
+const char rcCONNECT_1200[] PROGMEM = "CONNECT 1200";
+const char rcNO_DIALTONE[]  PROGMEM = "NO DIALTONE";
+const char rcBUSY[]         PROGMEM = "BUSY";
+const char rcNO_ANSWER[]    PROGMEM = "NO ANSWER";
+const char* const rcMsg[] = {rcOK, rcCONNECT, rcRING, rcNO_CARRIER, rcERROR,
+                             rcCONNECT_1200, rcNO_DIALTONE, rcBUSY, rcNO_ANSWER
+                            };
+
+
+
 class HAYES {
   public:
     HAYES(CFG_t *cfg, AFSK *afsk);
@@ -64,11 +84,13 @@ class HAYES {
     int8_t value = 0;
 
     // The result status of the last command
-    uint8_t cmdResult = 0;
+    uint8_t cmdResult = RC_OK;
 
     void    cmdPrint(char cmd, uint8_t value, bool newline = true);
     void    cmdPrint(uint8_t value);
     void    showProfile(CFG_t *cfg);
+
+    void    printResult(uint8_t code);
 };
 
 #endif /* HAYES_H */

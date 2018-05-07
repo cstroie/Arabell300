@@ -36,13 +36,13 @@ HAYES::~HAYES() {
   @param str the character array to print
   @param eol print the EOL
 */
-void print_P(const char *str, bool eol = false) {
+void print_P(const char *str, bool newline = false) {
   uint8_t val;
   do {
     val = pgm_read_byte(str++);
     if (val) Serial.write(val);
   } while (val);
-  if (eol) Serial.println();
+  if (newline) Serial.print(F("\r\n"));
 }
 
 /**
@@ -125,13 +125,13 @@ int16_t HAYES::getValidInteger(char* buf, int8_t idx, int16_t low, int16_t hgh, 
 }
 
 int16_t HAYES::getValidInteger(int16_t low, int16_t hgh, int16_t def = 0, uint8_t len) {
-  cmdResult = 1;
+  cmdResult = RC_OK;
   // Get the integer value
   int16_t res = getInteger(buf, idx, len);
   // Check if valid
   if ((res < low) or (res > hgh)) {
     res = def;
-    cmdResult = 0;
+    cmdResult = RC_ERROR;
   }
   // Return the result
   return res;
@@ -161,7 +161,7 @@ int8_t HAYES::getDigit(char* buf, int8_t idx) {
 int8_t HAYES::getDigit(int8_t def) {
   // The result is signed integer
   int8_t value = def;
-  cmdResult = 1;
+  cmdResult = RC_OK;
   // Check the pointed char
   if ((buf[idx] == '\0') or (buf[idx] == ' '))
     // If it is the last char ('\0') or space (' '), the value is zero
@@ -170,7 +170,7 @@ int8_t HAYES::getDigit(int8_t def) {
     // If it is a digit, get the numeric value
     value = buf[idx] - '0';
   else
-    cmdResult = 0;
+    cmdResult = RC_ERROR;
   // Return the resulting value
   return value;
 }
@@ -201,20 +201,30 @@ int8_t HAYES::getValidDigit(int8_t low, int8_t hgh, int8_t def) {
   // Get the digit value
   int8_t res = getDigit(def);
   // Check if valid
-  if ((cmdResult != 0) and ((res < low) or (res > hgh))) {
+  if ((cmdResult == RC_OK) and ((res < low) or (res > hgh))) {
     res = def;
-    cmdResult = 0;
+    cmdResult = RC_ERROR;
   }
   // Return the result
   return res;
 }
 
 void HAYES::cmdPrint(char cmd, uint8_t value, bool newline) {
+  // Print the initial newline, if needed
+  if (newline and _cfg->verbal)
+    Serial.print(F("\r\n"));
+  // Print the command
+  if (cmd != '\0') {
+    Serial.print(cmd);
+    Serial.print(F(": "));
+  }
   // Print the value
-  Serial.print(cmd); Serial.print(F(": ")); Serial.print(value);
-  if (newline) Serial.println();
+  Serial.print(value);
+  // Print the newline, if requested
+  if (newline) Serial.print(F("\r\n"));
   else         Serial.print(F("; "));
-  cmdResult = true;
+  // No other response code
+  cmdResult = RC_NONE;
 }
 
 void HAYES::cmdPrint(uint8_t value) {
@@ -231,25 +241,34 @@ void HAYES::showProfile(CFG_t *cfg) {
   cmdPrint('M', cfg->spkmod, false);
   cmdPrint('Q', cfg->quiet,  false);
   cmdPrint('V', cfg->verbal, false);
-  cmdPrint('X', cfg->selcpm);
+  cmdPrint('X', cfg->selcpm, false);
+  Serial.print(F("\r\n"));
 }
 
 void HAYES::dispatch() {
   // Reset the command result
-  cmdResult = 0;
+  cmdResult = RC_ERROR;
 
   // Start by finding the 'AT' sequence
   char *pch = strstr_P(buf, PSTR("AT"));
+
   if (pch != NULL) {
     // Jump over those two chars from the start
-    idx = buf - pch + 2;
+    idx = pch - buf + 2;
 
     // Check the first character, could be a symbol or a letter
-    switch (buf[idx++]) { // idx++ -> 1
+    switch (buf[idx++]) {
+
+      // New line, just "AT"
+      case '\0':
+        cmdResult = RC_OK;
+        break;
 
       // ATA Answer incomming call
       case 'A':
         // TODO
+        cmdResult = RC_NONE;
+        _afsk->setDirection(ANSWERING);
         break;
 
       // ATB Select Communication Protocol
@@ -257,10 +276,11 @@ void HAYES::dispatch() {
         if (buf[idx] == '?')
           cmdPrint(_cfg->compro);
         else {
-          _cfg->compro = getValidInteger(0, 31, _cfg->compro);
-          if (cmdResult) {
-            // Change the protocol
-            //_afsk.setProtocol();
+          _cfg->compro = getValidInteger(0, 1, _cfg->compro);
+          if (cmdResult == RC_OK) {
+            // Change the modem type
+            if (_cfg->compro == 1) _afsk->setModemType(BELL103);
+            else                   _afsk->setModemType(V_21);
           }
         }
         break;
@@ -271,6 +291,13 @@ void HAYES::dispatch() {
           cmdPrint(_cfg->txcarr);
         else
           _cfg->txcarr = getValidDigit(0, 1, _cfg->txcarr);
+        break;
+
+      // ATD Call
+      case 'D':
+        // TODO phases
+        cmdResult = RC_NONE;
+        _afsk->setDirection(ORIGINATING);
         break;
 
       // ATE Set local command mode echo
@@ -292,6 +319,7 @@ void HAYES::dispatch() {
       // ATH Hook control
       case 'H':
         // TODO
+        _afsk->setOnline(getValidDigit(0, 1, 0));
         break;
 
       // ATI Show info
@@ -299,7 +327,9 @@ void HAYES::dispatch() {
           uint8_t rqInfo = 0x00;
           // Get the digit value
           uint8_t value = getValidDigit(0, 7, 0);
-          if (cmdResult) {
+          if (cmdResult == RC_OK) {
+            // No more response messages
+            cmdResult = RC_NONE;
             // Specify the line to display
             rqInfo = 0x01 << value;
 
@@ -307,28 +337,35 @@ void HAYES::dispatch() {
             if (rqInfo & 0x01)
               print_P(DEVNAME, true);
             rqInfo = rqInfo >> 1;
+
             // 1 ROM checksum
             if (rqInfo & 0x01)
-              Serial.println(_cfg->crc8, 16);
+              cmdPrint('\0', _cfg->crc8);
             rqInfo = rqInfo >> 1;
+
             // 2 Tests ROM checksum THEN reports it
             if (rqInfo & 0x01) {
               struct CFG_t cfgTemp;
-              cmdResult = profile.read(&cfgTemp);
+              cmdResult = profile.read(&cfgTemp) ? RC_OK : RC_ERROR;
             }
             rqInfo = rqInfo >> 1;
+
             // 3 Firmware revision level.
             if (rqInfo & 0x01) {
               print_P(VERSION, true);
               print_P(DATE,    true);
             }
             rqInfo = rqInfo >> 1;
+
             // 4 Data connection info
             rqInfo = rqInfo >> 1;
+
             // 5 Regional Settings
             rqInfo = rqInfo >> 1;
+
             // 6 Data connection info
             rqInfo = rqInfo >> 1;
+
             // 7 Manufacturer and model info
             if (rqInfo & 0x01)
               print_P(AUTHOR,  true);
@@ -355,6 +392,9 @@ void HAYES::dispatch() {
 
       // ATO Return to data mode
       case 'O':
+        // No more response messages
+        cmdResult = RC_NONE;
+        // Data mode
         _afsk->dataMode = getValidDigit(0, 1, 0) + 1;
         break;
 
@@ -395,7 +435,7 @@ void HAYES::dispatch() {
         switch (buf[idx++]) { // idx++ -> 2
           // Factory defaults
           case 'F':
-            cmdResult = profile.factory(_cfg);
+            cmdResult = profile.factory(_cfg) ? RC_OK : RC_ERROR;
             break;
 
           // Show the configuration
@@ -404,7 +444,7 @@ void HAYES::dispatch() {
               showProfile(_cfg);
               Serial.println();
               struct CFG_t cfgTemp;
-              cmdResult = profile.read(&cfgTemp);
+              cmdResult = profile.read(&cfgTemp) ? RC_OK : RC_ERROR;
               Serial.println(F("STORED PROFILE:"));
               showProfile(&cfgTemp);
               Serial.println();
@@ -413,22 +453,16 @@ void HAYES::dispatch() {
 
           // Store the configuration
           case 'W':
-            cmdResult = profile.write(_cfg);
+            cmdResult = profile.write(_cfg) ? RC_OK : RC_ERROR;
             break;
 
           // Read the configuration
           case 'Y':
-            cmdResult = profile.read(_cfg);
+            cmdResult = profile.read(_cfg) ? RC_OK : RC_ERROR;
             break;
         }
         break;
-
-
-      default:
-        // Return OK if the command is just 'AT'
-        cmdResult = (len == 0);
     }
-
   }
 }
 
@@ -460,10 +494,9 @@ uint8_t HAYES::handle() {
         // Parse the line
         dispatch();
         // Check the line length before reporting
-        if (len >= 0) {
-          if (cmdResult)  Serial.println(F("OK"));
-          else            Serial.println(F("ERROR"));
-        }
+        if (len >= 0)
+          // Print the command response
+          printResult(cmdResult);
         // Reset the buffer length
         len = 0;
       }
@@ -471,3 +504,21 @@ uint8_t HAYES::handle() {
   }
 }
 
+/**
+  Print the command result code or message
+  http://www.messagestick.net/modem/Hayes_Ch1-2.html
+
+  @param code the response code
+*/
+void HAYES::printResult(uint8_t code) {
+  if (code != RC_NONE and _cfg->quiet != 1)
+    if (_cfg->verbal) {
+      Serial.print(F("\r\n"));
+      print_P(rcMsg[code]);
+      Serial.print(F("\r\n"));
+    }
+    else {
+      Serial.print(code);
+      Serial.print(F("\r"));
+    }
+}
