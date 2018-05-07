@@ -266,9 +266,10 @@ void HAYES::dispatch() {
 
       // ATA Answer incomming call
       case 'A':
-        // TODO
         cmdResult = RC_NONE;
         _afsk->setDirection(ANSWERING);
+        _afsk->dataMode = 1;
+        _afsk->setOnline(1);
         break;
 
       // ATB Select Communication Protocol
@@ -298,6 +299,8 @@ void HAYES::dispatch() {
         // TODO phases
         cmdResult = RC_NONE;
         _afsk->setDirection(ORIGINATING);
+        _afsk->dataMode = 1;
+        _afsk->setOnline(1);
         break;
 
       // ATE Set local command mode echo
@@ -432,7 +435,15 @@ void HAYES::dispatch() {
 
       // Standard '&' extension
       case '&':
-        switch (buf[idx++]) { // idx++ -> 2
+        switch (buf[idx++]) {
+          // Reverse answering frequencies
+          case 'A':
+            if (buf[idx] == '?')
+              cmdPrint(_cfg->revans);
+            else
+              _cfg->revans = getValidDigit(0, 1, _cfg->revans);
+            break;
+
           // Factory defaults
           case 'F':
             cmdResult = profile.factory(_cfg) ? RC_OK : RC_ERROR;

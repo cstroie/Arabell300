@@ -84,29 +84,6 @@ void AFSK::initSteps() {
 }
 
 /**
-  Set the connection direction
-
-  @param dir connection direction ORIGINATING, ANSWERING
-*/
-void AFSK::setDirection(uint8_t dir) {
-  // Keep the direction
-  _dir = dir;
-  // Create TX/RX pointers to ORIGINATING/ANSWERING parameters
-  if (_dir == ORIGINATING) {
-    fsqTX = &_afsk.orig;
-    fsqRX = &_afsk.answ;
-  }
-  else {
-    fsqTX = &_afsk.answ;
-    fsqRX = &_afsk.orig;
-  }
-  // Prepare the delay queue for RX
-  dyFIFO.clear();
-  for (uint8_t i = 0; i < fsqRX->queuelen; i++)
-    dyFIFO.in(bias);
-}
-
-/**
   Initialize the hardware
 */
 void AFSK::initHW() {
@@ -330,11 +307,11 @@ void AFSK::rxHandle(uint8_t sample) {
   //  1200:  0.4470595850866754  0.10588082982664918
 
   rx.iirX[0] = rx.iirX[1];
-  //  rx.iirX[1] = ((dyFIFO.out() - 128) * ss) >> 2;
-  rx.iirX[1] = ((dyFIFO.out() - 128) * ss) >> 3;
+  rx.iirX[1] = ((dyFIFO.out() - 128) * ss) >> 2;
+  //rx.iirX[1] = ((dyFIFO.out() - 128) * ss) >> 3;
   rx.iirY[0] = rx.iirY[1];
-  //  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
-  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + ((rx.iirY[0] >> 4) * 15); // *0.9
+  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
+  //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + ((rx.iirY[0] >> 4) * 15); // *0.9
 
   // Keep the unsigned sample in delay FIFO
   dyFIFO.in(sample);
@@ -343,7 +320,7 @@ void AFSK::rxHandle(uint8_t sample) {
   rx.active = true; //abs(rx.iirY[1] > 1);
   if (rx.active)
     // Call the decoder
-    rxDecoder((rx.iirY[1] > 0) ? MARK : SPACE);
+    rxDecoder(((rx.iirY[1] > 0) ? MARK : SPACE) ^ fsqRX->polarity);
   else
     // Disable the decoder and wait
     rx.state  = WAIT;
@@ -537,7 +514,7 @@ void AFSK::serial() {
     }
 
     // There is data on serial port, process it normally
-    if (not txFIFO.full()) {
+    if (not txFIFO.full() and dataMode) {
       // FIFO not full, we can send the data
       c = Serial.read();
       txFIFO.in(c);
@@ -552,7 +529,7 @@ void AFSK::serial() {
   }
 
   // Check if there is any data in RX FIFO
-  if (not rxFIFO.empty()) {
+  if (not rxFIFO.empty() and dataMode) {
     // Get the byte and send it to serial line
     c = rxFIFO.out();
     Serial.write(c);
@@ -563,10 +540,36 @@ void AFSK::serial() {
   Handle both the TX and RX, if in data mode
 */
 void AFSK::handle() {
-  if (dataMode) {
+  if (_online) {
     this->txHandle();
     this->rxHandle(ADCH);
   }
+}
+
+/**
+  Set the connection direction
+
+  @param dir connection direction ORIGINATING, ANSWERING
+*/
+void AFSK::setDirection(uint8_t dir) {
+  // Keep the direction
+  _dir = dir;
+  // Create TX/RX pointers to ORIGINATING/ANSWERING parameters
+  if ((_dir == ORIGINATING) ^ _cfg->revans) {
+    fsqTX = &_afsk.orig;
+    fsqRX = &_afsk.answ;
+  }
+  else {
+    fsqTX = &_afsk.answ;
+    fsqRX = &_afsk.orig;
+  }
+  // Clear the FIFOs
+  rxFIFO.clear();
+  txFIFO.clear();
+  // Prepare the delay queue for RX
+  dyFIFO.clear();
+  for (uint8_t i = 0; i < fsqRX->queuelen; i++)
+    dyFIFO.in(bias);
 }
 
 /**

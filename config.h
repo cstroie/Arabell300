@@ -46,6 +46,7 @@ struct CFG_t {
       uint8_t quiet : 1;  // ATQ Quiet mode
       uint8_t verbal: 1;  // ATV Verbose mode
       uint8_t selcpm: 1;  // ATX Select call progress method
+      uint8_t revans: 1;  // AT&A Reverse answering frequencies
     };
     uint8_t data[cfgLen];
   };
