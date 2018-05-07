@@ -27,7 +27,7 @@
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Bell103";
-const char VERSION[]  PROGMEM = "v2.18";
+const char VERSION[]  PROGMEM = "v2.19";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DATE[]     PROGMEM = __DATE__;
 
@@ -53,11 +53,10 @@ struct CFG_t {
 
 
 
-
-class CFG {
+class Profile {
   public:
-    CFG();
-    ~CFG();
+    Profile();
+    ~Profile();
 
     // EEPROM address to store the configuration to
     uint16_t  eeAddress = 0x0080;

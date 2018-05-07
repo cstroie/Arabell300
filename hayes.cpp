@@ -19,10 +19,11 @@
 
 #include "hayes.h"
 
-CFG ee;
+Profile profile;
 
 HAYES::HAYES(CFG_t *cfg, AFSK *afsk): _cfg(cfg), _afsk(afsk) {
-  ee.init(_cfg);
+  // Try to restore the profile or use factory defaults
+  profile.init(_cfg);
 }
 
 HAYES::~HAYES() {
@@ -313,7 +314,7 @@ void HAYES::dispatch() {
             // 2 Tests ROM checksum THEN reports it
             if (rqInfo & 0x01) {
               struct CFG_t cfgTemp;
-              cmdResult = ee.read(&cfgTemp);
+              cmdResult = profile.read(&cfgTemp);
             }
             rqInfo = rqInfo >> 1;
             // 3 Firmware revision level.
@@ -394,7 +395,7 @@ void HAYES::dispatch() {
         switch (buf[idx++]) { // idx++ -> 2
           // Factory defaults
           case 'F':
-            cmdResult = ee.factory(_cfg);
+            cmdResult = profile.factory(_cfg);
             break;
 
           // Show the configuration
@@ -403,7 +404,7 @@ void HAYES::dispatch() {
               showProfile(_cfg);
               Serial.println();
               struct CFG_t cfgTemp;
-              cmdResult = ee.read(&cfgTemp);
+              cmdResult = profile.read(&cfgTemp);
               Serial.println(F("STORED PROFILE:"));
               showProfile(&cfgTemp);
               Serial.println();
@@ -412,12 +413,12 @@ void HAYES::dispatch() {
 
           // Store the configuration
           case 'W':
-            cmdResult = ee.write(_cfg);
+            cmdResult = profile.write(_cfg);
             break;
 
           // Read the configuration
           case 'Y':
-            cmdResult = ee.read(_cfg);
+            cmdResult = profile.read(_cfg);
             break;
         }
         break;

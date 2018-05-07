@@ -19,10 +19,10 @@
 
 #include "config.h"
 
-CFG::CFG() {
+Profile::Profile() {
 }
 
-CFG::~CFG() {
+Profile::~Profile() {
 }
 
 /**
@@ -32,7 +32,7 @@ CFG::~CFG() {
   @param inData new data
   @return updated CRC
 */
-uint8_t CFG::CRC8(uint8_t inCrc, uint8_t inData) {
+uint8_t Profile::CRC8(uint8_t inCrc, uint8_t inData) {
   uint8_t outCrc = inCrc ^ inData;
   for (uint8_t i = 0; i < 8; ++i) {
     if ((outCrc & 0x80 ) != 0) {
@@ -52,7 +52,7 @@ uint8_t CFG::CRC8(uint8_t inCrc, uint8_t inData) {
   @param cfgTemp the configuration structure
   @return computed CRC8
 */
-uint8_t CFG::crc(CFG_t *cfg) {
+uint8_t Profile::crc(CFG_t *cfg) {
   // Compute the CRC8 checksum of the data
   uint8_t crc8 = 0;
   for (uint8_t i = 1; i < cfgLen; i++)
@@ -67,7 +67,7 @@ uint8_t CFG::crc(CFG_t *cfg) {
   @param cfg1 the second configuration structure
   @return true if equal
 */
-bool CFG::equal(CFG_t *cfg1, CFG_t *cfg2) {
+bool Profile::equal(CFG_t *cfg1, CFG_t *cfg2) {
   bool result = true;
   // Check CRC first
   if (cfg1->crc8 != cfg2->crc8)
@@ -83,7 +83,7 @@ bool CFG::equal(CFG_t *cfg1, CFG_t *cfg2) {
 /**
   Write the configuration to EEPROM, along with CRC8, if different
 */
-bool CFG::write(CFG_t *cfg) {
+bool Profile::write(CFG_t *cfg) {
   // Temporary configuration structure
   struct CFG_t cfgTemp;
   // Read the data from EEPROM into the temporary structure
@@ -107,7 +107,7 @@ bool CFG::write(CFG_t *cfg) {
 /**
   Read the configuration from EEPROM, along with CRC8, and verify
 */
-bool CFG::read(CFG_t *cfg, bool useDefaults = false) {
+bool Profile::read(CFG_t *cfg, bool useDefaults = false) {
   // Temporary configuration structure
   struct CFG_t cfgTemp;
   // Read the data from EEPROM into the temporary structure
@@ -128,7 +128,7 @@ bool CFG::read(CFG_t *cfg, bool useDefaults = false) {
 /**
   Reset the configuration to factory defaults
 */
-bool CFG::factory(CFG_t *cfg) {
+bool Profile::factory(CFG_t *cfg) {
   cfg->compro = 0x00; // ATB
   cfg->txcarr = 0x01; // ATC
   cfg->cmecho = 0x01; // ATE
@@ -144,7 +144,7 @@ bool CFG::factory(CFG_t *cfg) {
 /**
   Try to load the stored profile or use the factory defaults
 */
-void CFG::init(CFG_t *cfg) {
+void Profile::init(CFG_t *cfg) {
   this->read(cfg, true);
 }
 
