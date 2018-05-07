@@ -27,7 +27,7 @@
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Bell103";
-const char VERSION[]  PROGMEM = "v2.17";
+const char VERSION[]  PROGMEM = "v2.18";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DATE[]     PROGMEM = __DATE__;
 
@@ -36,19 +36,19 @@ const uint8_t cfgLen = 32;
 struct CFG_t {
   union {
     struct {
+      uint8_t crc8  : 8;  // CRC8 of the following data
       uint8_t compro: 8;  // ATB Select Communication Protocol
       uint8_t txcarr: 1;  // ATC Keep a carrier going when transmitting
-      uint8_t cmecho: 1;  // Local command mode echo
-      uint8_t dtecho: 1;  // Local data mode echo
+      uint8_t cmecho: 1;  // ATE Local command mode echo
+      uint8_t dtecho: 1;  // ATF Local data mode echo
+      uint8_t spklvl: 2;  // ATL Speaker volume level
+      uint8_t spkmod: 2;  // ATM Speaker mode
       uint8_t quiet : 1;  // ATQ Quiet mode
-      uint8_t verbos: 1;  // ATV Verbose mode
+      uint8_t verbal: 1;  // ATV Verbose mode
       uint8_t selcpm: 1;  // ATX Select call progress method
-      uint8_t spkmod: 2;  // Speaker mode
-      uint8_t spklvl: 2;  // Speaker volume level
     };
-    uint8_t data[cfgLen];   // We use 8 bytes in the structure
+    uint8_t data[cfgLen];
   };
-  uint8_t crc8;         // CRC8
 };
 
 
@@ -62,14 +62,15 @@ class CFG {
     // EEPROM address to store the configuration to
     uint16_t  eeAddress = 0x0080;
 
-
-    uint8_t CRC8(uint8_t inCrc, uint8_t inData);
-    uint8_t crc(CFG_t *cfg);
-    bool    equal(CFG_t *cfg1, CFG_t *cfg2);
     bool    write(CFG_t *cfg);
     bool    read(CFG_t *cfg, bool useDefaults = false);
     bool    factory(CFG_t *cfg);
+    void    init(CFG_t *cfg);
 
+  private:
+    uint8_t crc(CFG_t *cfg);
+    uint8_t CRC8(uint8_t inCrc, uint8_t inData);
+    bool    equal(CFG_t *cfg1, CFG_t *cfg2);
 };
 
 #endif /* CONFIG_H */

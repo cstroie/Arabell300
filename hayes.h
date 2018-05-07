@@ -66,8 +66,9 @@ class HAYES {
     // The result status of the last command
     uint8_t cmdResult = 0;
 
-    void    cmdPrint(char cmd, uint8_t value);
+    void    cmdPrint(char cmd, uint8_t value, bool newline = true);
     void    cmdPrint(uint8_t value);
+    void    showProfile(CFG_t *cfg);
 };
 
 #endif /* HAYES_H */

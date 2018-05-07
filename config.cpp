@@ -55,7 +55,7 @@ uint8_t CFG::CRC8(uint8_t inCrc, uint8_t inData) {
 uint8_t CFG::crc(CFG_t *cfg) {
   // Compute the CRC8 checksum of the data
   uint8_t crc8 = 0;
-  for (uint8_t i = 0; i < cfgLen; i++)
+  for (uint8_t i = 1; i < cfgLen; i++)
     crc8 = this->CRC8(crc8, cfg->data[i]);
   return crc8;
 }
@@ -74,7 +74,7 @@ bool CFG::equal(CFG_t *cfg1, CFG_t *cfg2) {
     result = false;
   else
     // Compare the overlayed array of the two structures
-    for (uint8_t i = 0; i < cfgLen; i++)
+    for (uint8_t i = 1; i < cfgLen; i++)
       if (cfg1->data[i] != cfg2->data[i])
         result = false;
   return result;
@@ -87,15 +87,19 @@ bool CFG::write(CFG_t *cfg) {
   // Temporary configuration structure
   struct CFG_t cfgTemp;
   // Read the data from EEPROM into the temporary structure
-  EEPROM.get(eeAddress, cfgTemp);
+  EEPROM.get(eeAddress, cfgTemp.data);
   // Compute the CRC8 checksum of the read data
   uint8_t crc8 = this->crc(&cfgTemp);
   // Compute the CRC8 checksum of the actual data
   cfg->crc8 = this->crc(cfg);
   // Compare the new and the stored data and check if the stored data is valid
-  if (not this->equal(cfg, &cfgTemp) or (cfgTemp.crc8 != crc8))
+  if (not this->equal(cfg, &cfgTemp) or (cfgTemp.crc8 != crc8)) {
+    // Copy the actual data to the temporary structure
+    for (uint8_t i = 0; i < cfgLen; i++)
+      cfgTemp.data[i] = cfg->data[i];
     // Write the data
-    EEPROM.put(eeAddress, cfg);
+    EEPROM.put(eeAddress, cfgTemp.data);
+  }
   // Always return true, even if data is not written
   return true;
 }
@@ -111,14 +115,10 @@ bool CFG::read(CFG_t *cfg, bool useDefaults = false) {
   // Compute the CRC8 checksum of the read data
   uint8_t crc8 = this->crc(&cfgTemp);
   // And compare with the read crc8 checksum
-  Serial.println(cfgTemp.crc8);
-  Serial.println(crc8);
   if (cfgTemp.crc8 == crc8) {
-    // Copy the temporary structure to configuration
+    // Copy the temporary structure to configuration and the crc8, too
     for (uint8_t i = 0; i < cfgLen; i++)
       cfg->data[i] = cfgTemp.data[i];
-    // Copy the crc8, too
-    cfg->crc8 = crc8;
   }
   else if (useDefaults)
     factory(cfg);
@@ -129,8 +129,22 @@ bool CFG::read(CFG_t *cfg, bool useDefaults = false) {
   Reset the configuration to factory defaults
 */
 bool CFG::factory(CFG_t *cfg) {
-  cfg->spkmod = 0x01;
-  cfg->spklvl = 0x01;
-  cfg->cmecho = 0x01;
+  cfg->compro = 0x00; // ATB
+  cfg->txcarr = 0x01; // ATC
+  cfg->cmecho = 0x01; // ATE
+  cfg->dtecho = 0x00; // ATF
+  cfg->spklvl = 0x01; // ATL
+  cfg->spkmod = 0x01; // ATM
+  cfg->quiet  = 0x00; // ATQ
+  cfg->verbal = 0x01; // ATV
+  cfg->selcpm = 0x00; // ATX
+  return true;
 };
+
+/**
+  Try to load the stored profile or use the factory defaults
+*/
+void CFG::init(CFG_t *cfg) {
+  this->read(cfg, true);
+}
 

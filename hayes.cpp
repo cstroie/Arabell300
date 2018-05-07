@@ -22,6 +22,7 @@
 CFG ee;
 
 HAYES::HAYES(CFG_t *cfg, AFSK *afsk): _cfg(cfg), _afsk(afsk) {
+  ee.init(_cfg);
 }
 
 HAYES::~HAYES() {
@@ -207,15 +208,29 @@ int8_t HAYES::getValidDigit(int8_t low, int8_t hgh, int8_t def) {
   return res;
 }
 
-void HAYES::cmdPrint(char cmd, uint8_t value) {
+void HAYES::cmdPrint(char cmd, uint8_t value, bool newline) {
   // Print the value
-  Serial.print(cmd); Serial.print(F(": ")); Serial.println(value);
-  cmdResult = 1;
+  Serial.print(cmd); Serial.print(F(": ")); Serial.print(value);
+  if (newline) Serial.println();
+  else         Serial.print(F("; "));
+  cmdResult = true;
 }
 
 void HAYES::cmdPrint(uint8_t value) {
   // Print the value
   cmdPrint(buf[idx - 1], value);
+}
+
+void HAYES::showProfile(CFG_t *cfg) {
+  cmdPrint('B', cfg->compro, false);
+  cmdPrint('C', cfg->txcarr, false);
+  cmdPrint('E', cfg->cmecho, false);
+  cmdPrint('F', cfg->dtecho, false);
+  cmdPrint('L', cfg->spklvl, false);
+  cmdPrint('M', cfg->spkmod, false);
+  cmdPrint('Q', cfg->quiet,  false);
+  cmdPrint('V', cfg->verbal, false);
+  cmdPrint('X', cfg->selcpm);
 }
 
 void HAYES::dispatch() {
@@ -296,8 +311,10 @@ void HAYES::dispatch() {
               Serial.println(_cfg->crc8, 16);
             rqInfo = rqInfo >> 1;
             // 2 Tests ROM checksum THEN reports it
-            if (rqInfo & 0x01)
-              Serial.println(_cfg->crc8, 16);
+            if (rqInfo & 0x01) {
+              struct CFG_t cfgTemp;
+              cmdResult = ee.read(&cfgTemp);
+            }
             rqInfo = rqInfo >> 1;
             // 3 Firmware revision level.
             if (rqInfo & 0x01) {
@@ -351,9 +368,9 @@ void HAYES::dispatch() {
       // ATV Verbose mode
       case 'V':
         if (buf[idx] == '?')
-          cmdPrint(_cfg->verbos);
+          cmdPrint(_cfg->verbal);
         else
-          _cfg->verbos = getValidDigit(0, 1, _cfg->verbos);
+          _cfg->verbal = getValidDigit(0, 1, _cfg->verbal);
         break;
 
       // ATX Select call progress method
@@ -377,20 +394,25 @@ void HAYES::dispatch() {
         switch (buf[idx++]) { // idx++ -> 2
           // Factory defaults
           case 'F':
-            //cmdResult = cfg.factory();
+            cmdResult = ee.factory(_cfg);
             break;
 
           // Show the configuration
-          case 'V':
-            Serial.print(F("E: "));   Serial.print(_cfg->cmecho); Serial.print(F("; "));
-            Serial.print(F("L: "));   Serial.print(_cfg->spklvl); Serial.print(F("; "));
-            Serial.print(F("M: "));   Serial.print(_cfg->spkmod); Serial.print(F("; "));
-            cmdResult = true;
+          case 'V': {
+              Serial.println(F("ACTIVE PROFILE:"));
+              showProfile(_cfg);
+              Serial.println();
+              struct CFG_t cfgTemp;
+              cmdResult = ee.read(&cfgTemp);
+              Serial.println(F("STORED PROFILE:"));
+              showProfile(&cfgTemp);
+              Serial.println();
+            }
             break;
 
           // Store the configuration
           case 'W':
-            //cmdResult = cfgWriteEE();
+            cmdResult = ee.write(_cfg);
             break;
 
           // Read the configuration
