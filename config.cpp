@@ -129,7 +129,7 @@ bool Profile::read(CFG_t *cfg, bool useDefaults = false) {
   Reset the configuration to factory defaults
 */
 bool Profile::factory(CFG_t *cfg) {
-  cfg->compro = 0x00; // ATB
+  cfg->compro = 0x01; // ATB
   cfg->txcarr = 0x01; // ATC
   cfg->cmecho = 0x01; // ATE
   cfg->dtecho = 0x00; // ATF

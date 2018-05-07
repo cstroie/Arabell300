@@ -37,7 +37,7 @@ struct CFG_t {
   union {
     struct {
       uint8_t crc8  : 8;  // CRC8 of the following data
-      uint8_t compro: 8;  // ATB Select Communication Protocol
+      uint8_t compro: 1;  // ATB Select Communication Protocol
       uint8_t txcarr: 1;  // ATC Keep a carrier going when transmitting
       uint8_t cmecho: 1;  // ATE Local command mode echo
       uint8_t dtecho: 1;  // ATF Local data mode echo
