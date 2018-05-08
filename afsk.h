@@ -200,7 +200,7 @@ static AFSK_t RTTY = {
 class AFSK {
   public:
     uint8_t bias      = 0x80;   // Input line level bias
-    uint8_t carrier   = 240;    // Number of carrier bits to send in preamble and trail
+    uint8_t carBits   = 240;    // Number of carrier bits to send in preamble and trail
 
 #ifdef DEBUG_RX_LVL
     uint8_t inLevel   = 0x00;   // Get the input level
@@ -215,6 +215,7 @@ class AFSK {
     void setDirection(uint8_t dir);
     void setOnline(uint8_t online);
     void setMode(uint8_t mode);
+    void setCarrier(uint8_t onoff);
     void doTXRX();
     bool doSIO();
 
@@ -227,9 +228,10 @@ class AFSK {
     AFSK_t  _afsk;
     CFG_t  *_cfg;
 
-    uint8_t _online = OFF;     // OnHook / OffHook
-    uint8_t _mode   = COMMAND_MODE;   // Modem works in data mode or in command mode
-    uint8_t _dir    = ORIGINATING;
+    uint8_t _online   = OFF;     // OnHook / OffHook
+    uint8_t _mode     = COMMAND_MODE;   // Modem works in data mode or in command mode
+    uint8_t _dir      = ORIGINATING;
+    uint8_t _carrier  = OFF;
     uint8_t fulBit, hlfBit, qrtBit, octBit;
 
     TX_t tx;

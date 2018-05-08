@@ -176,7 +176,7 @@ void AFSK::txHandle() {
   uint8_t sample = wave.sample(tx.idx);
 
   // Check if we are transmitting
-  if (tx.active == 1 or _cfg->txcarr == 1) {
+  if (tx.active == ON or _carrier == ON) {
     // Output the sample
     DAC(sample);
     // Step up the index for the next sample
@@ -208,7 +208,7 @@ void AFSK::txHandle() {
         // We are sending the preamble carrier
         case PREAMBLE:
           // Check if we have sent the carrier long enough
-          if (++tx.bits >= carrier) {
+          if (++tx.bits >= carBits) {
             // Carrier sent, go to the start bit (SPACE)
             tx.state  = START_BIT;
             tx.dtbit  = SPACE;
@@ -258,14 +258,14 @@ void AFSK::txHandle() {
         // We are sending the trail carrier
         case TRAIL:
           // Check if we have sent the trail carrier long enough
-          if (++tx.bits > carrier) {
+          if (++tx.bits > carBits) {
             // Disable TX and wait
             tx.active = OFF;
             tx.state  = WAIT;
             // TX led off
             PORTB    &= ~_BV(PORTB1);
           }
-          else if (tx.bits == carrier and _cfg->txcarr != 1) {
+          else if (tx.bits == carBits and _carrier == OFF) {
             // After the last trail carrier bit, send nothing
             tx.dtbit  = MARK;
             // Prepare for the future TX
@@ -584,13 +584,8 @@ void AFSK::setDirection(uint8_t dir) {
     fsqTX = &_afsk.answ;
     fsqRX = &_afsk.orig;
   }
-  // Clear the FIFOs
-  rxFIFO.clear();
-  txFIFO.clear();
-  // Prepare the delay queue for RX
-  dyFIFO.clear();
-  for (uint8_t i = 0; i < fsqRX->queuelen; i++)
-    dyFIFO.in(bias);
+  // Go offline
+  this->setOnline(OFF);
 }
 
 /**
@@ -601,6 +596,18 @@ void AFSK::setDirection(uint8_t dir) {
 void AFSK::setOnline(uint8_t online) {
   // Keep the online status
   _online = online;
+
+  if (online == OFF) {
+    // Command mode
+    this->setMode(COMMAND_MODE);
+    // Clear the FIFOs
+    rxFIFO.clear();
+    txFIFO.clear();
+    // Prepare the delay queue for RX
+    dyFIFO.clear();
+    for (uint8_t i = 0; i < fsqRX->queuelen; i++)
+      dyFIFO.in(bias);
+  }
 }
 
 /**
@@ -613,6 +620,14 @@ void AFSK::setMode(uint8_t mode) {
   this->_mode = mode;
 }
 
+/**
+  Enable or disable the carrier going at runtime
+
+  @param onoff carrier mode
+*/
+void AFSK::setCarrier(uint8_t onoff) {
+  _carrier = onoff & _cfg->txcarr;
+}
 
 /**
   Test case simulation: feed the RX demodulator

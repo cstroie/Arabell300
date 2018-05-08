@@ -247,17 +247,14 @@ void HAYES::doCommand() {
   if (pch != NULL) {
     // Jump over those two chars from the start
     idx = pch - buf + 2;
-    while (idx <= len) {
-      if (buf[idx] == '\0') {
-        // New line, just "AT"
-        cmdResult = RC_OK;
+    // New line, just "AT"
+    if (len <= 2)
+      cmdResult = RC_OK;
+    // Process the line
+    while (idx < len) {
+      this->dispatch();
+      if (cmdResult == RC_ERROR)
         break;
-      }
-      else {
-        this->dispatch();
-        if (cmdResult == RC_ERROR)
-          break;
-      }
     }
   }
 }
@@ -273,12 +270,17 @@ void HAYES::dispatch() {
 
     // ATA Answer incomming call
     case 'A':
-      cmdResult = RC_CONNECT;
+      cmdResult = RC_NO_CARRIER;
+      // Phase 1: Set direction
       _afsk->setDirection(ANSWERING);
+      // Phase 2: Go online
       _afsk->setOnline(ON);
+      // Phase 2: Carrier on (after a while)
+      _afsk->setCarrier(ON);
+      // Phase 3: Check originating carrier for S7 seconds
+      // Phase 4: Data mode if carrier found
       _afsk->setMode(DATA_MODE);
-      // TODO Check originating carrier for S7 seconds
-      // cmdResult = RC_NO_CARRIER;
+      cmdResult = RC_CONNECT;
       break;
 
     // ATB Select Communication Protocol
@@ -308,21 +310,25 @@ void HAYES::dispatch() {
     case 'C':
       if (buf[idx] == '?')
         cmdPrint(_cfg->txcarr);
-      else
+      else {
         _cfg->txcarr = getValidDigit(0, 1, _cfg->txcarr);
+        _afsk->setCarrier(ON);
+      }
       break;
 
     // ATD Call
     case 'D':
       // TODO phases
       cmdResult = RC_ERROR;
-      // Phase 1: ATH1, check dialtone/busy (NO_DIALTONE/BUSY)
-      // Phase 2: Dial: DTMF/Pulses
-      // Phase 3: Check direction, wait for RX carrier (NO_CARRIER)
+      // Phase 1: Set direction
       _afsk->setDirection(ORIGINATING);
+      // Phase 2: Go online, check dialtone / busy (NO_DIALTONE / BUSY)
       _afsk->setOnline(ON);
-      // Phase 4: Enable TX carrier (if not already)
-      // Phase 5: Enter data mode
+      // Phase 3: Dial: DTMF/Pulses
+      // Phase 4: Wait for RX carrier (NO_CARRIER)
+      // Phase 5: Enable TX carrier (if not already)
+      _afsk->setCarrier(ON);
+      // Phase 6: Enter data mode
       _afsk->setMode(DATA_MODE);
       cmdResult = RC_CONNECT;
       break;
@@ -345,7 +351,6 @@ void HAYES::dispatch() {
 
     // ATH Hook control
     case 'H':
-      // TODO
       _afsk->setOnline(getValidDigit(0, 1, 0));
       break;
 
