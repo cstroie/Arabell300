@@ -266,10 +266,12 @@ void HAYES::dispatch() {
 
       // ATA Answer incomming call
       case 'A':
-        cmdResult = RC_NONE;
+        cmdResult = RC_CONNECT;
         _afsk->setDirection(ANSWERING);
+        _afsk->setOnline(ON);
         _afsk->setMode(DATA_MODE);
-        _afsk->setOnline(1);
+        // TODO Check originating carrier for S7 seconds
+        // cmdResult = RC_NO_CARRIER;
         break;
 
       // ATB Select Communication Protocol
@@ -277,9 +279,17 @@ void HAYES::dispatch() {
         if (buf[idx] == '?')
           cmdPrint(_cfg->compro);
         else {
-          _cfg->compro = getValidInteger(0, 1, _cfg->compro);
+          _cfg->compro = getValidInteger(0, 31, _cfg->compro);
           if (cmdResult == RC_OK) {
             // Change the modem type
+            switch (_cfg->compro) {
+              case  5:  _afsk->setModemType(V_23_M2); break;
+              case 15:  _afsk->setModemType(V_21);    break;
+              case 16:  _afsk->setModemType(BELL103); break;
+              case 23:  _afsk->setModemType(V_23_M1); break;
+              default:
+                cmdResult == RC_ERROR;
+            }
             if (_cfg->compro == 1) _afsk->setModemType(BELL103);
             else                   _afsk->setModemType(V_21);
           }
