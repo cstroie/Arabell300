@@ -39,24 +39,24 @@ FIFO::~FIFO() {
   free(buf);
 }
 
-uint8_t FIFO::_full() {
+bool FIFO::_full() {
   return ((i_out > i_in) ? (i_out - i_in == 1) : (i_out - i_in + _size == 1));
 }
 
-uint8_t FIFO::full() {
-  uint8_t result;
+bool FIFO::full() {
+  bool result;
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     result = this->_full();
   }
   return result;
 }
 
-uint8_t FIFO::_empty() {
+bool FIFO::_empty() {
   return (i_in == i_out);
 }
 
-uint8_t FIFO::empty() {
-  uint8_t result;
+bool FIFO::empty() {
+  bool result;
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     result = this->_empty();
   }
@@ -75,26 +75,28 @@ uint8_t FIFO::len() {
   return result;
 }
 
-uint8_t FIFO::_clear() {
+void FIFO::_clear() {
   i_in  = 0;
   i_out = 0;
 }
 
-uint8_t FIFO::clear() {
+void FIFO::clear() {
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     this->_clear();
   }
 }
 
-uint8_t FIFO::_in(uint8_t x) {
+bool FIFO::_in(uint8_t x) {
   if (not this->_full()) {
     buf[i_in] = x;
     i_in = (i_in + 1) & _mask;
+    return true;
   }
+  return false;
 }
 
-uint8_t FIFO::in(uint8_t x) {
-  uint8_t result;
+bool FIFO::in(uint8_t x) {
+  bool result;
   ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
     result = this->_in(x);
   }

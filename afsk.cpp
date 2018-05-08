@@ -532,10 +532,10 @@ bool AFSK::doSIO() {
       if (not txFIFO.full()) {
         // FIFO not full, we can send the data
         c = Serial.read();
-        txFIFO.in(c);
-        // Local data mode echo
-        if (_cfg->dtecho)
-          Serial.print(c);
+        if (txFIFO.in(c))
+          // Local data mode echo
+          if (_cfg->dtecho)
+            Serial.print(c);
         // Keep transmitting
         tx.active = ON;
         // TX led on
@@ -561,7 +561,7 @@ bool AFSK::doSIO() {
   Handle both the TX and RX, if in data mode
 */
 void AFSK::doTXRX() {
-  if (_online) {
+  if (this->_online) {
     this->txHandle();
     this->rxHandle(ADCH);
   }

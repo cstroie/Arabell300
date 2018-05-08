@@ -26,11 +26,11 @@ class FIFO {
   public:
     FIFO(uint8_t bitsize = 4);
     ~FIFO();
-    uint8_t full();
-    uint8_t empty();
+    bool    full();
+    bool    empty();
     uint8_t len();
-    uint8_t clear();
-    uint8_t in(uint8_t x);
+    void    clear();
+    bool    in(uint8_t x);
     uint8_t out();
     uint8_t peek();
 
@@ -42,11 +42,11 @@ class FIFO {
     uint8_t i_in;
     uint8_t i_out;
 
-    uint8_t _full();
-    uint8_t _empty();
+    bool    _full();
+    bool    _empty();
     uint8_t _len();
-    uint8_t _clear();
-    uint8_t _in(uint8_t x);
+    void    _clear();
+    bool    _in(uint8_t x);
     uint8_t _out();
     uint8_t _peek();
 };
