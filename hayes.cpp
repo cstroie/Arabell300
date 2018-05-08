@@ -209,12 +209,14 @@ int8_t HAYES::getValidDigit(int8_t low, int8_t hgh, int8_t def) {
   return res;
 }
 
-void HAYES::cmdPrint(char cmd, uint8_t value, bool newline) {
+void HAYES::cmdPrint(char cmd, char mod, uint8_t value, bool newline) {
   // Print the initial newline, if needed
   if (newline and _cfg->verbal)
     Serial.print(F("\r\n"));
   // Print the command
   if (cmd != '\0') {
+    if (mod != '\0')
+      Serial.print(mod);
     Serial.print(cmd);
     Serial.print(F(": "));
   }
@@ -225,6 +227,10 @@ void HAYES::cmdPrint(char cmd, uint8_t value, bool newline) {
   else         Serial.print(F("; "));
   // No other response code
   cmdResult = RC_NONE;
+}
+
+void HAYES::cmdPrint(char cmd, uint8_t value, bool newline) {
+  cmdPrint(cmd, '\0', value, newline);
 }
 
 void HAYES::cmdPrint(uint8_t value) {
@@ -245,7 +251,7 @@ void HAYES::showProfile(CFG_t *cfg) {
   Serial.print(F("\r\n"));
 }
 
-void HAYES::dispatch() {
+void HAYES::doCommand() {
   // Reset the command result
   cmdResult = RC_ERROR;
 
@@ -256,239 +262,248 @@ void HAYES::dispatch() {
     // Jump over those two chars from the start
     idx = pch - buf + 2;
 
-    // Check the first character, could be a symbol or a letter
-    switch (buf[idx++]) {
-
-      // New line, just "AT"
-      case '\0':
-        cmdResult = RC_OK;
-        break;
-
-      // ATA Answer incomming call
-      case 'A':
-        cmdResult = RC_CONNECT;
-        _afsk->setDirection(ANSWERING);
-        _afsk->setOnline(ON);
-        _afsk->setMode(DATA_MODE);
-        // TODO Check originating carrier for S7 seconds
-        // cmdResult = RC_NO_CARRIER;
-        break;
-
-      // ATB Select Communication Protocol
-      case 'B':
-        if (buf[idx] == '?')
-          cmdPrint(_cfg->compro);
-        else {
-          _cfg->compro = getValidInteger(0, 31, _cfg->compro);
-          if (cmdResult == RC_OK) {
-            // Change the modem type
-            switch (_cfg->compro) {
-              case  5:  _afsk->setModemType(V_23_M2); break;
-              case 15:  _afsk->setModemType(V_21);    break;
-              case 16:  _afsk->setModemType(BELL103); break;
-              case 23:  _afsk->setModemType(V_23_M1); break;
-              default:
-                cmdResult == RC_ERROR;
-            }
-            if (_cfg->compro == 1) _afsk->setModemType(BELL103);
-            else                   _afsk->setModemType(V_21);
-          }
-        }
-        break;
-
-      // ATC Transmit carrier
-      case 'C':
-        if (buf[idx] == '?')
-          cmdPrint(_cfg->txcarr);
-        else
-          _cfg->txcarr = getValidDigit(0, 1, _cfg->txcarr);
-        break;
-
-      // ATD Call
-      case 'D':
-        // TODO phases
-        cmdResult = RC_NONE;
-        _afsk->setDirection(ORIGINATING);
-        _afsk->setMode(DATA_MODE);
-        _afsk->setOnline(ON);
-        break;
-
-      // ATE Set local command mode echo
-      case 'E':
-        if (buf[idx] == '?')
-          cmdPrint(_cfg->cmecho);
-        else
-          _cfg->cmecho = getValidDigit(0, 1, _cfg->cmecho);
-        break;
-
-      // ATF Set local data mode echo
-      case 'F':
-        if (buf[idx] == '?')
-          cmdPrint(_cfg->dtecho);
-        else
-          _cfg->dtecho = getValidDigit(0, 1, _cfg->dtecho);
-        break;
-
-      // ATH Hook control
-      case 'H':
-        // TODO
-        _afsk->setOnline(getValidDigit(0, 1, 0));
-        break;
-
-      // ATI Show info
-      case 'I': {
-          uint8_t rqInfo = 0x00;
-          // Get the digit value
-          uint8_t value = getValidDigit(0, 7, 0);
-          if (cmdResult == RC_OK) {
-            // No more response messages
-            cmdResult = RC_NONE;
-            // Specify the line to display
-            rqInfo = 0x01 << value;
-
-            // 0 Modem model and speed
-            if (rqInfo & 0x01)
-              print_P(DEVNAME, true);
-            rqInfo = rqInfo >> 1;
-
-            // 1 ROM checksum
-            if (rqInfo & 0x01)
-              cmdPrint('\0', _cfg->crc8);
-            rqInfo = rqInfo >> 1;
-
-            // 2 Tests ROM checksum THEN reports it
-            if (rqInfo & 0x01) {
-              struct CFG_t cfgTemp;
-              cmdResult = profile.read(&cfgTemp) ? RC_OK : RC_ERROR;
-            }
-            rqInfo = rqInfo >> 1;
-
-            // 3 Firmware revision level.
-            if (rqInfo & 0x01) {
-              print_P(VERSION, true);
-              print_P(DATE,    true);
-            }
-            rqInfo = rqInfo >> 1;
-
-            // 4 Data connection info
-            rqInfo = rqInfo >> 1;
-
-            // 5 Regional Settings
-            rqInfo = rqInfo >> 1;
-
-            // 6 Data connection info
-            rqInfo = rqInfo >> 1;
-
-            // 7 Manufacturer and model info
-            if (rqInfo & 0x01)
-              print_P(AUTHOR,  true);
-            rqInfo = rqInfo >> 1;
-          }
-        }
-        break;
-
-      // ATL Set speaker volume level
-      case 'L':
-        if (buf[idx] == '?')
-          cmdPrint(_cfg->spklvl);
-        else
-          _cfg->spklvl = getValidDigit(0, 3, _cfg->spklvl);
-        break;
-
-      // ATM Speaker control
-      case 'M':
-        if (buf[idx] == '?')
-          cmdPrint(_cfg->spkmod);
-        else
-          _cfg->spkmod = getValidDigit(0, 3, _cfg->spkmod);
-        break;
-
-      // ATO Return to data mode
-      case 'O':
-        // No more response messages
-        cmdResult = RC_NONE;
-        // Data mode
-        _afsk->setMode(getValidDigit(0, 1, 0) + 1);
-        break;
-
-      // ATQ Quiet Mode
-      case 'Q':
-        if (buf[idx] == '?')
-          cmdPrint(_cfg->quiet);
-        else
-          _cfg->quiet = getValidDigit(0, 1, _cfg->quiet);
-        break;
-
-      // ATV Verbose mode
-      case 'V':
-        if (buf[idx] == '?')
-          cmdPrint(_cfg->verbal);
-        else
-          _cfg->verbal = getValidDigit(0, 1, _cfg->verbal);
-        break;
-
-      // ATX Select call progress method
-      case 'X':
-        if (buf[idx] == '?')
-          cmdPrint(_cfg->selcpm);
-        else
-          _cfg->selcpm = getValidDigit(0, 1, _cfg->selcpm);
-        break;
-
-      // ATZ Reset
-      case 'Z':
-        wdt_enable(WDTO_2S);
-        // Wait for the prescaller time to expire
-        // without sending the reset signal
-        while (true);
-        break;
-
-      // Standard '&' extension
-      case '&':
-        switch (buf[idx++]) {
-          // Reverse answering frequencies
-          case 'A':
-            if (buf[idx] == '?')
-              cmdPrint(_cfg->revans);
-            else
-              _cfg->revans = getValidDigit(0, 1, _cfg->revans);
-            break;
-
-          // Factory defaults
-          case 'F':
-            cmdResult = profile.factory(_cfg) ? RC_OK : RC_ERROR;
-            break;
-
-          // Show the configuration
-          case 'V': {
-              Serial.println(F("ACTIVE PROFILE:"));
-              showProfile(_cfg);
-              Serial.println();
-              struct CFG_t cfgTemp;
-              cmdResult = profile.read(&cfgTemp) ? RC_OK : RC_ERROR;
-              Serial.println(F("STORED PROFILE:"));
-              showProfile(&cfgTemp);
-              Serial.println();
-            }
-            break;
-
-          // Store the configuration
-          case 'W':
-            cmdResult = profile.write(_cfg) ? RC_OK : RC_ERROR;
-            break;
-
-          // Read the configuration
-          case 'Y':
-            cmdResult = profile.read(_cfg) ? RC_OK : RC_ERROR;
-            break;
-        }
+    while (idx <= len) {
+      this->dispatch();
+      if (cmdResult == RC_ERROR)
         break;
     }
   }
+
 }
 
 
-uint8_t HAYES::handle() {
+void HAYES::dispatch() {
+  // Check the first character, could be a symbol or a letter
+  switch (buf[idx++]) {
+
+    // New line, just "AT"
+    case '\0':
+      cmdResult = RC_OK;
+      break;
+
+    // ATA Answer incomming call
+    case 'A':
+      cmdResult = RC_CONNECT;
+      _afsk->setDirection(ANSWERING);
+      _afsk->setOnline(ON);
+      _afsk->setMode(DATA_MODE);
+      // TODO Check originating carrier for S7 seconds
+      // cmdResult = RC_NO_CARRIER;
+      break;
+
+    // ATB Select Communication Protocol
+    case 'B':
+      if (buf[idx] == '?')
+        cmdPrint(_cfg->compro);
+      else {
+        _cfg->compro = getValidInteger(0, 31, _cfg->compro);
+        if (cmdResult == RC_OK) {
+          // Change the modem type
+          switch (_cfg->compro) {
+            case  5:  _afsk->setModemType(V_23_M2); break;
+            case 15:  _afsk->setModemType(V_21);    break;
+            case 16:  _afsk->setModemType(BELL103); break;
+            case 23:  _afsk->setModemType(V_23_M1); break;
+            default:
+              cmdResult == RC_ERROR;
+          }
+          if (_cfg->compro == 1) _afsk->setModemType(BELL103);
+          else                   _afsk->setModemType(V_21);
+        }
+      }
+      break;
+
+    // ATC Transmit carrier
+    case 'C':
+      if (buf[idx] == '?')
+        cmdPrint(_cfg->txcarr);
+      else
+        _cfg->txcarr = getValidDigit(0, 1, _cfg->txcarr);
+      break;
+
+    // ATD Call
+    case 'D':
+      // TODO phases
+      cmdResult = RC_NONE;
+      _afsk->setDirection(ORIGINATING);
+      _afsk->setMode(DATA_MODE);
+      _afsk->setOnline(ON);
+      break;
+
+    // ATE Set local command mode echo
+    case 'E':
+      if (buf[idx] == '?')
+        cmdPrint(_cfg->cmecho);
+      else
+        _cfg->cmecho = getValidDigit(0, 1, _cfg->cmecho);
+      break;
+
+    // ATF Set local data mode echo
+    case 'F':
+      if (buf[idx] == '?')
+        cmdPrint(_cfg->dtecho);
+      else
+        _cfg->dtecho = getValidDigit(0, 1, _cfg->dtecho);
+      break;
+
+    // ATH Hook control
+    case 'H':
+      // TODO
+      _afsk->setOnline(getValidDigit(0, 1, 0));
+      break;
+
+    // ATI Show info
+    case 'I': {
+        uint8_t rqInfo = 0x00;
+        // Get the digit value
+        uint8_t value = getValidDigit(0, 7, 0);
+        if (cmdResult == RC_OK) {
+          // No more response messages
+          cmdResult = RC_NONE;
+          // Specify the line to display
+          rqInfo = 0x01 << value;
+
+          // 0 Modem model and speed
+          if (rqInfo & 0x01)
+            print_P(DEVNAME, true);
+          rqInfo = rqInfo >> 1;
+
+          // 1 ROM checksum
+          if (rqInfo & 0x01)
+            cmdPrint('\0', _cfg->crc8);
+          rqInfo = rqInfo >> 1;
+
+          // 2 Tests ROM checksum THEN reports it
+          if (rqInfo & 0x01) {
+            struct CFG_t cfgTemp;
+            cmdResult = profile.read(&cfgTemp) ? RC_OK : RC_ERROR;
+          }
+          rqInfo = rqInfo >> 1;
+
+          // 3 Firmware revision level.
+          if (rqInfo & 0x01) {
+            print_P(VERSION, true);
+            print_P(DATE,    true);
+          }
+          rqInfo = rqInfo >> 1;
+
+          // 4 Data connection info
+          rqInfo = rqInfo >> 1;
+
+          // 5 Regional Settings
+          rqInfo = rqInfo >> 1;
+
+          // 6 Data connection info
+          rqInfo = rqInfo >> 1;
+
+          // 7 Manufacturer and model info
+          if (rqInfo & 0x01)
+            print_P(AUTHOR,  true);
+          rqInfo = rqInfo >> 1;
+        }
+      }
+      break;
+
+    // ATL Set speaker volume level
+    case 'L':
+      if (buf[idx] == '?')
+        cmdPrint(_cfg->spklvl);
+      else
+        _cfg->spklvl = getValidDigit(0, 3, _cfg->spklvl);
+      break;
+
+    // ATM Speaker control
+    case 'M':
+      if (buf[idx] == '?')
+        cmdPrint(_cfg->spkmod);
+      else
+        _cfg->spkmod = getValidDigit(0, 3, _cfg->spkmod);
+      break;
+
+    // ATO Return to data mode
+    case 'O':
+      // No more response messages
+      cmdResult = RC_NONE;
+      // Data mode
+      _afsk->setMode(getValidDigit(0, 1, 0) + 1);
+      break;
+
+    // ATQ Quiet Mode
+    case 'Q':
+      if (buf[idx] == '?')
+        cmdPrint(_cfg->quiet);
+      else
+        _cfg->quiet = getValidDigit(0, 1, _cfg->quiet);
+      break;
+
+    // ATV Verbose mode
+    case 'V':
+      if (buf[idx] == '?')
+        cmdPrint(_cfg->verbal);
+      else
+        _cfg->verbal = getValidDigit(0, 1, _cfg->verbal);
+      break;
+
+    // ATX Select call progress method
+    case 'X':
+      if (buf[idx] == '?')
+        cmdPrint(_cfg->selcpm);
+      else
+        _cfg->selcpm = getValidDigit(0, 1, _cfg->selcpm);
+      break;
+
+    // ATZ Reset
+    case 'Z':
+      wdt_enable(WDTO_2S);
+      // Wait for the prescaller time to expire
+      // without sending the reset signal
+      while (true);
+      break;
+
+    // Standard '&' extension
+    case '&':
+      switch (buf[idx++]) {
+        // Reverse answering frequencies
+        case 'A':
+          if (buf[idx] == '?')
+            cmdPrint('A', '&', _cfg->revans);
+          else
+            _cfg->revans = getValidDigit(0, 1, _cfg->revans);
+          break;
+
+        // Factory defaults
+        case 'F':
+          cmdResult = profile.factory(_cfg) ? RC_OK : RC_ERROR;
+          break;
+
+        // Show the configuration
+        case 'V': {
+            Serial.println(F("ACTIVE PROFILE:"));
+            showProfile(_cfg);
+            Serial.println();
+            struct CFG_t cfgTemp;
+            cmdResult = profile.read(&cfgTemp) ? RC_OK : RC_ERROR;
+            Serial.println(F("STORED PROFILE:"));
+            showProfile(&cfgTemp);
+            Serial.println();
+          }
+          break;
+
+        // Store the configuration
+        case 'W':
+          cmdResult = profile.write(_cfg) ? RC_OK : RC_ERROR;
+          break;
+
+        // Read the configuration
+        case 'Y':
+          cmdResult = profile.read(_cfg) ? RC_OK : RC_ERROR;
+          break;
+      }
+      break;
+  }
+}
+
+uint8_t HAYES::doSIO() {
   char c;
   // Read from serial only if there is room in buffer
   if (len < MAX_INPUT_SIZE - 1) {
@@ -513,7 +528,7 @@ uint8_t HAYES::handle() {
         // Make sure the last char is null
         buf[len - 1] = '\0';
         // Parse the line
-        dispatch();
+        doCommand();
         // Check the line length before reporting
         if (len >= 0)
           // Print the command response

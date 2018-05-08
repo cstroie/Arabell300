@@ -65,7 +65,7 @@ void setup() {
 void loop() {
   // Check the serial port and handle data
   if (not afsk.doSIO())
-    hayes.handle();
+    hayes.doSIO();
 
 #ifdef DEBUG_RX_LVL
   static uint32_t next = millis();

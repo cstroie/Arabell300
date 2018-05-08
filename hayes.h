@@ -67,7 +67,8 @@ class HAYES {
     int8_t  getValidDigit(int8_t low, int8_t hgh, int8_t def = HAYES_NUM_ERROR);
 
 
-    uint8_t handle();
+    uint8_t doSIO();
+    void    doCommand();
     void    dispatch();
 
   private:
@@ -87,7 +88,9 @@ class HAYES {
     uint8_t cmdResult = RC_OK;
 
     void    cmdPrint(char cmd, uint8_t value, bool newline = true);
+    void    cmdPrint(char cmd, char mod, uint8_t value, bool newline = true);
     void    cmdPrint(uint8_t value);
+    
     void    showProfile(CFG_t *cfg);
 
     void    printResult(uint8_t code);
