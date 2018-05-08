@@ -268,7 +268,7 @@ void HAYES::dispatch() {
       case 'A':
         cmdResult = RC_NONE;
         _afsk->setDirection(ANSWERING);
-        _afsk->dataMode = 1;
+        _afsk->setMode(DATA_MODE);
         _afsk->setOnline(1);
         break;
 
@@ -299,8 +299,8 @@ void HAYES::dispatch() {
         // TODO phases
         cmdResult = RC_NONE;
         _afsk->setDirection(ORIGINATING);
-        _afsk->dataMode = 1;
-        _afsk->setOnline(1);
+        _afsk->setMode(DATA_MODE);
+        _afsk->setOnline(ON);
         break;
 
       // ATE Set local command mode echo
@@ -398,7 +398,7 @@ void HAYES::dispatch() {
         // No more response messages
         cmdResult = RC_NONE;
         // Data mode
-        _afsk->dataMode = getValidDigit(0, 1, 0) + 1;
+        _afsk->setMode(getValidDigit(0, 1, 0) + 1);
         break;
 
       // ATQ Quiet Mode

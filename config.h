@@ -27,7 +27,7 @@
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Bell103";
-const char VERSION[]  PROGMEM = "v2.20";
+const char VERSION[]  PROGMEM = "v2.21";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DATE[]     PROGMEM = __DATE__;
 

@@ -43,7 +43,7 @@ HAYES hayes(&cfg, &afsk);
 ISR(ADC_vect) {
   TIFR1 = _BV(ICF1);
 #ifndef DEBUG
-  afsk.handle();
+  afsk.doTXRX();
 #endif
 }
 
@@ -55,24 +55,16 @@ void setup() {
   // We really should use 300 baud...
   Serial.begin(9600);
 
-  // Runtime configuration
-  afsk.dataMode = 0;
-
-  // Define and configure the afsk
+  // Define and configure the modem
   afsk.init(BELL103, &cfg);
-
-  // afsk.setDirection(ORIGINATING);
-  //afsk.setDirection(ANSWERING);
 }
 
 /**
   Main Arduino loop
 */
 void loop() {
-  // Check the serial port and handle data or command mode
-  if (afsk.dataMode)
-    afsk.serial();
-  else
+  // Check the serial port and handle data
+  if (not afsk.doSIO())
     hayes.handle();
 
 #ifdef DEBUG_RX_LVL

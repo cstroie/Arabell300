@@ -63,7 +63,7 @@ void AFSK::setModemType(AFSK_t afsk) {
   // Start as originating
   this->setDirection(ORIGINATING);
   // Start in command mode
-  dataMode = false;
+  this->setMode(COMMAND_MODE);
   // Compute modem specific parameters
   fulBit = F_SAMPLE / _afsk.baud;
   hlfBit = fulBit >> 1;
@@ -77,10 +77,20 @@ void AFSK::setModemType(AFSK_t afsk) {
   @param x the afsk modem to compute for
 */
 void AFSK::initSteps() {
-  for (uint8_t b = SPACE; b <= MARK; b++) {
-    _afsk.orig.step[b] = (wave.full * (uint32_t)_afsk.orig.freq[b] + F_SAMPLE / 2) / F_SAMPLE;
-    _afsk.answ.step[b] = (wave.full * (uint32_t)_afsk.answ.freq[b] + F_SAMPLE / 2) / F_SAMPLE;
-  }
+  _afsk.orig.step[SPACE] = getWaveStep(_afsk.orig.freq[SPACE]);
+  _afsk.orig.step[MARK]  = getWaveStep(_afsk.orig.freq[MARK]);
+  _afsk.answ.step[SPACE] = getWaveStep(_afsk.answ.freq[SPACE]);
+  _afsk.answ.step[MARK]  = getWaveStep(_afsk.answ.freq[MARK]);
+}
+
+/**
+  Compute the samples step for the given frequency
+
+  @param freq the frequency
+  @return the step
+*/
+uint8_t AFSK::getWaveStep(uint32_t freq) {
+  return (wave.full * freq + F_SAMPLE / 2) / F_SAMPLE;
 }
 
 /**
@@ -250,7 +260,7 @@ void AFSK::txHandle() {
           // Check if we have sent the trail carrier long enough
           if (++tx.bits > carrier) {
             // Disable TX and wait
-            tx.active = 0;
+            tx.active = OFF;
             tx.state  = WAIT;
             // TX led off
             PORTB    &= ~_BV(PORTB1);
@@ -462,13 +472,15 @@ void AFSK::rxDecoder(uint8_t bt) {
   Check the serial I/O and transmit the data, respectively check
   the received data and send it to the serial port.
 */
-void AFSK::serial() {
+bool AFSK::doSIO() {
   // The charcter on the serial line
   uint8_t c;
   // The escape characters counters
   static uint8_t  escCount = 0;
   static uint32_t escFirst = 0;
   static uint32_t escLast  = 0;
+  // Characters waiting on the serial input
+  bool available = (Serial.available() != 0);
 
   // Check if we saw the escape string "+++"
   if (escCount == 3) {
@@ -476,10 +488,10 @@ void AFSK::serial() {
     // Check for the guard silence
     if (millis() - escLast > 1000) {
       // This is it, go in command mode
-      dataMode = 0;
+      this->setMode(COMMAND_MODE);
       escCount = 0;
     }
-    else if (Serial.available() > 0) {
+    else if (available) {
       // We saw the string recently, check if there is any
       // other character on the line.
       c = Serial.peek();
@@ -492,8 +504,8 @@ void AFSK::serial() {
     }
   }
 
-  // Check if there iss any data on serial port
-  if (Serial.available() > 0) {
+  // Check if there is any data on serial port
+  if (available) {
     // Check for "+++" escape sequence
     if (Serial.peek() == '+') {
       // Check when we saw the first '+'
@@ -512,34 +524,43 @@ void AFSK::serial() {
         }
       }
     }
+  }
 
-    // There is data on serial port, process it normally
-    if (not txFIFO.full() and dataMode) {
-      // FIFO not full, we can send the data
-      c = Serial.read();
-      txFIFO.in(c);
-      // Local data mode echo
-      if (_cfg->dtecho)
-        Serial.print(c);
-      // Keep transmitting
-      tx.active = 1;
-      // TX led on
-      PORTB |= _BV(PORTB1);
+  if (this->_mode != COMMAND_MODE) {
+    if (available) {
+      // There is data on serial port, process it normally
+      if (not txFIFO.full()) {
+        // FIFO not full, we can send the data
+        c = Serial.read();
+        txFIFO.in(c);
+        // Local data mode echo
+        if (_cfg->dtecho)
+          Serial.print(c);
+        // Keep transmitting
+        tx.active = ON;
+        // TX led on
+        PORTB |= _BV(PORTB1);
+      }
     }
-  }
 
-  // Check if there is any data in RX FIFO
-  if (not rxFIFO.empty() and dataMode) {
-    // Get the byte and send it to serial line
-    c = rxFIFO.out();
-    Serial.write(c);
+    // Check if there is any data in RX FIFO
+    if (not rxFIFO.empty()) {
+      // Get the byte and send it to serial line
+      c = rxFIFO.out();
+      Serial.write(c);
+    }
+    // Return true, to let the caller know we have processed the data
+    return true;
   }
+  else
+    // We have not processed the data
+    return false;
 }
 
 /**
   Handle both the TX and RX, if in data mode
 */
-void AFSK::handle() {
+void AFSK::doTXRX() {
   if (_online) {
     this->txHandle();
     this->rxHandle(ADCH);
@@ -580,6 +601,16 @@ void AFSK::setDirection(uint8_t dir) {
 void AFSK::setOnline(uint8_t online) {
   // Keep the online status
   _online = online;
+}
+
+/**
+  Set the modem mode
+
+  @param mode command mode or data mode
+*/
+void AFSK::setMode(uint8_t mode) {
+  // Keep the mode
+  this->_mode = mode;
 }
 
 

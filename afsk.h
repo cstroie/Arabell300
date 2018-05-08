@@ -47,6 +47,10 @@ enum BIT {SPACE, MARK};
 enum TXRX_STATE {WAIT, PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL};
 // Connection direction
 enum DIRECTION {ORIGINATING, ANSWERING};
+// Command and data mode
+enum MODES {COMMAND_MODE, DATA_MODE};
+// On / Off
+enum ONOFF {OFF, ON};
 
 // Transmission related data
 struct TX_t {
@@ -195,7 +199,6 @@ static AFSK_t RTTY = {
 
 class AFSK {
   public:
-    uint8_t dataMode  = 0;      // Modem works in data mode or in command mode
     uint8_t bias      = 0x80;   // Input line level bias
     uint8_t carrier   = 240;    // Number of carrier bits to send in preamble and trail
 
@@ -211,8 +214,11 @@ class AFSK {
     void setModemType(AFSK_t afsk);
     void setDirection(uint8_t dir);
     void setOnline(uint8_t online);
-    void handle();
-    void serial();
+    void setMode(uint8_t mode);
+    void doTXRX();
+    bool doSIO();
+
+    uint8_t getWaveStep(uint32_t freq);
 
     void simFeed();             // Simulation
     void simPrint();
@@ -221,8 +227,9 @@ class AFSK {
     AFSK_t  _afsk;
     CFG_t  *_cfg;
 
-    uint8_t _online = 0;     // OnHook / OffHook
-    uint8_t _dir = ORIGINATING;
+    uint8_t _online = OFF;     // OnHook / OffHook
+    uint8_t _mode   = COMMAND_MODE;   // Modem works in data mode or in command mode
+    uint8_t _dir    = ORIGINATING;
     uint8_t fulBit, hlfBit, qrtBit, octBit;
 
     TX_t tx;
