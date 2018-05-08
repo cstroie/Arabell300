@@ -59,9 +59,9 @@ class HAYES {
     ~HAYES();
 
     int16_t getInteger(char* buf, int8_t idx, uint8_t len = 32);
-    int16_t getValidInteger(char* buf, int8_t idx, int16_t low, int16_t hgh, int16_t def = 0, uint8_t len = 32);
+    int16_t getValidInteger(char* buf, uint8_t idx, int16_t low, int16_t hgh, int16_t def = 0, uint8_t len = 32);
     int16_t getValidInteger(int16_t low, int16_t hgh, int16_t def = 0, uint8_t len = 32);
-    int8_t  getDigit(char* buf, int8_t idx);
+    int8_t  getDigit(char* buf, uint8_t idx, int8_t def = HAYES_NUM_ERROR);
     int8_t  getDigit(int8_t def = HAYES_NUM_ERROR);
     int8_t  getValidDigit(char* buf, int8_t idx, int8_t low, int8_t hgh, int8_t def = HAYES_NUM_ERROR);
     int8_t  getValidDigit(int8_t low, int8_t hgh, int8_t def = HAYES_NUM_ERROR);
@@ -90,7 +90,7 @@ class HAYES {
     void    cmdPrint(char cmd, uint8_t value, bool newline = true);
     void    cmdPrint(char cmd, char mod, uint8_t value, bool newline = true);
     void    cmdPrint(uint8_t value);
-    
+
     void    showProfile(CFG_t *cfg);
 
     void    printResult(uint8_t code);

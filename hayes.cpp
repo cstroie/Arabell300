@@ -114,20 +114,14 @@ int16_t HAYES::getInteger(char* buf, int8_t idx, uint8_t len = 32) {
   @param len maximum to parse, 0 for no limit
   @return the integer value or default
 */
-int16_t HAYES::getValidInteger(char* buf, int8_t idx, int16_t low, int16_t hgh, int16_t def = 0, uint8_t len) {
-  // Get the integer value
-  int16_t res = getInteger(buf, idx, len);
-  // Check if valid
-  if ((res < low) or (res > hgh))
-    res = def;
-  // Return the result
-  return res;
+int16_t HAYES::getValidInteger(int16_t low, int16_t hgh, int16_t def, uint8_t len) {
+  return getValidInteger(buf, idx, low, hgh, def, len);
 }
 
-int16_t HAYES::getValidInteger(int16_t low, int16_t hgh, int16_t def = 0, uint8_t len) {
+int16_t HAYES::getValidInteger(char* buf, uint8_t idx, int16_t low, int16_t hgh, int16_t def, uint8_t len) {
   cmdResult = RC_OK;
   // Get the integer value
-  int16_t res = getInteger(buf, idx, len);
+  int16_t res = getInteger(buf, (int8_t)idx, len);
   // Check if valid
   if ((res < low) or (res > hgh)) {
     res = def;
@@ -144,21 +138,11 @@ int16_t HAYES::getValidInteger(int16_t low, int16_t hgh, int16_t def = 0, uint8_
   @param idx index to start with
   @return the integer found or HAYES_NUM_ERROR
 */
-int8_t HAYES::getDigit(char* buf, int8_t idx) {
-  // The result is signed integer
-  int8_t res = HAYES_NUM_ERROR;
-  // Check the pointed char
-  if ((buf[idx] == '\0') or (buf[idx] == ' '))
-    // If it is the last char ('\0') or space (' '), the value is zero
-    res = 0;
-  else if (isdigit(buf[idx]))
-    // If it is a digit, get the numeric value
-    res = buf[idx] - '0';
-  // Return the result
-  return res;
+int8_t HAYES::getDigit(int8_t def) {
+  return getDigit(buf, idx, def);
 }
 
-int8_t HAYES::getDigit(int8_t def) {
+int8_t HAYES::getDigit(char* buf, uint8_t idx, int8_t def) {
   // The result is signed integer
   int8_t value = def;
   cmdResult = RC_OK;
@@ -171,6 +155,8 @@ int8_t HAYES::getDigit(int8_t def) {
     value = buf[idx] - '0';
   else
     cmdResult = RC_ERROR;
+  // Index up
+  idx++;
   // Return the resulting value
   return value;
 }
@@ -261,24 +247,28 @@ void HAYES::doCommand() {
   if (pch != NULL) {
     // Jump over those two chars from the start
     idx = pch - buf + 2;
-
     while (idx <= len) {
-      this->dispatch();
-      if (cmdResult == RC_ERROR)
+      if (buf[idx] == '\0') {
+        // New line, just "AT"
+        cmdResult = RC_OK;
         break;
+      }
+      else {
+        this->dispatch();
+        if (cmdResult == RC_ERROR)
+          break;
+      }
     }
   }
-
 }
 
 
 void HAYES::dispatch() {
   // Check the first character, could be a symbol or a letter
   switch (buf[idx++]) {
-
-    // New line, just "AT"
+    // Skip over some characters
+    case ' ':
     case '\0':
-      cmdResult = RC_OK;
       break;
 
     // ATA Answer incomming call
@@ -305,10 +295,11 @@ void HAYES::dispatch() {
             case 16:  _afsk->setModemType(BELL103); break;
             case 23:  _afsk->setModemType(V_23_M1); break;
             default:
-              cmdResult == RC_ERROR;
+              // Default to Bell 103
+              _cfg->compro = 16;
+              _afsk->setModemType(BELL103);
+              cmdResult = RC_ERROR;
           }
-          if (_cfg->compro == 1) _afsk->setModemType(BELL103);
-          else                   _afsk->setModemType(V_21);
         }
       }
       break;
@@ -324,10 +315,16 @@ void HAYES::dispatch() {
     // ATD Call
     case 'D':
       // TODO phases
-      cmdResult = RC_NONE;
+      cmdResult = RC_ERROR;
+      // Phase 1: ATH1, check dialtone/busy (NO_DIALTONE/BUSY)
+      // Phase 2: Dial: DTMF/Pulses
+      // Phase 3: Check direction, wait for RX carrier (NO_CARRIER)
       _afsk->setDirection(ORIGINATING);
-      _afsk->setMode(DATA_MODE);
       _afsk->setOnline(ON);
+      // Phase 4: Enable TX carrier (if not already)
+      // Phase 5: Enter data mode
+      _afsk->setMode(DATA_MODE);
+      cmdResult = RC_CONNECT;
       break;
 
     // ATE Set local command mode echo
@@ -485,7 +482,6 @@ void HAYES::dispatch() {
             cmdResult = profile.read(&cfgTemp) ? RC_OK : RC_ERROR;
             Serial.println(F("STORED PROFILE:"));
             showProfile(&cfgTemp);
-            Serial.println();
           }
           break;
 
@@ -519,14 +515,15 @@ uint8_t HAYES::doSIO() {
       buf[len++] = c;
       // Check for EOL
       if (c == '\r' or c == '\n') {
-        Serial.print("\r\n");
+        //Serial.print(F("\r\n"));
         // Check the next character
         c = Serial.peek();
         // If newline, consume it
         if (c == '\r' or c == '\n')
           Serial.read();
         // Make sure the last char is null
-        buf[len - 1] = '\0';
+        len--;
+        buf[len] = '\0';
         // Parse the line
         doCommand();
         // Check the line length before reporting
