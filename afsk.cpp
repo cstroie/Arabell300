@@ -535,7 +535,7 @@ bool AFSK::doSIO() {
         if (txFIFO.in(c))
           // Local data mode echo
           if (_cfg->dtecho)
-            Serial.print(c);
+            Serial.print((char)c);
         // Keep transmitting
         tx.active = ON;
         // TX led on
