@@ -29,6 +29,7 @@
 const char DEVNAME[]  PROGMEM = "Bell103";
 const char VERSION[]  PROGMEM = "v2.21";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
+const char DESCRP[]   PROGMEM = "Arduino emulated standard 300 baud modem";
 const char DATE[]     PROGMEM = __DATE__;
 
 // Modem configuration

@@ -396,6 +396,8 @@ void HAYES::dispatch() {
           rqInfo = rqInfo >> 1;
 
           // 6 Data connection info
+          if (rqInfo & 0x01)
+            print_P(DESCRP,  true);
           rqInfo = rqInfo >> 1;
 
           // 7 Manufacturer and model info
@@ -456,10 +458,10 @@ void HAYES::dispatch() {
 
     // ATZ Reset
     case 'Z':
-      wdt_enable(WDTO_2S);
+      //FIXME wdt_enable(WDTO_2S);
       // Wait for the prescaller time to expire
       // without sending the reset signal
-      while (true);
+      //FIXME while (true);
       break;
 
     // Standard '&' extension
