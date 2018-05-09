@@ -572,11 +572,12 @@ void AFSK::doTXRX() {
 
   @param dir connection direction ORIGINATING, ANSWERING
 */
-void AFSK::setDirection(uint8_t dir) {
+void AFSK::setDirection(uint8_t dir, uint8_t rev) {
   // Keep the direction
   _dir = dir;
   // Create TX/RX pointers to ORIGINATING/ANSWERING parameters
-  if ((_dir == ORIGINATING) ^ _cfg->revans) {
+  if ((_dir == ORIGINATING and rev == OFF) or
+      (_dir == ANSWERING and _cfg->revans == ON)) {
     fsqTX = &_afsk.orig;
     fsqRX = &_afsk.answ;
   }
