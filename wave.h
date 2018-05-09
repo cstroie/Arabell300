@@ -21,6 +21,7 @@
 #define WAVE_H
 
 #include <Arduino.h>
+#include "config.h"
 
 // The first quarter wave samples LUT
 static const uint8_t wavelut[] = {
@@ -46,6 +47,8 @@ class WAVE {
 
     // Get the wave sample specified by index
     uint8_t sample(uint8_t idx);
+    // Compute the wave steps
+    uint8_t WAVE::getStep(uint32_t freq);
 };
 
 #endif /* WAVE_H */

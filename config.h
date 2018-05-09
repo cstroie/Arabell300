@@ -20,6 +20,13 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// CPU frequency correction for sampling timer
+#define F_COR (-120000L)
+
+// Sampling frequency
+#define F_SAMPLE    9600
+
+
 #include <Arduino.h>
 // EEPROM
 #include <EEPROM.h>

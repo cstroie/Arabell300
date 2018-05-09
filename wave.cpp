@@ -45,3 +45,14 @@ uint8_t WAVE::sample(uint8_t idx) {
     result = 0xFF - result;
   return result;
 }
+
+/**
+  Compute the samples step for the given frequency
+
+  @param freq the frequency
+  @return the step
+*/
+uint8_t WAVE::getStep(uint32_t freq) {
+  return (this->full * freq + F_SAMPLE / 2) / F_SAMPLE;
+}
+

@@ -26,6 +26,9 @@
 // The wave generator
 WAVE wave;
 
+// The DTMF wave generator
+DTMF dtmf(40, 40);
+
 // FIFOs
 FIFO txFIFO(6);
 FIFO rxFIFO(6);
@@ -77,20 +80,10 @@ void AFSK::setModemType(AFSK_t afsk) {
   @param x the afsk modem to compute for
 */
 void AFSK::initSteps() {
-  _afsk.orig.step[SPACE] = getWaveStep(_afsk.orig.freq[SPACE]);
-  _afsk.orig.step[MARK]  = getWaveStep(_afsk.orig.freq[MARK]);
-  _afsk.answ.step[SPACE] = getWaveStep(_afsk.answ.freq[SPACE]);
-  _afsk.answ.step[MARK]  = getWaveStep(_afsk.answ.freq[MARK]);
-}
-
-/**
-  Compute the samples step for the given frequency
-
-  @param freq the frequency
-  @return the step
-*/
-uint8_t AFSK::getWaveStep(uint32_t freq) {
-  return (wave.full * freq + F_SAMPLE / 2) / F_SAMPLE;
+  _afsk.orig.step[SPACE] = wave.getStep(_afsk.orig.freq[SPACE]);
+  _afsk.orig.step[MARK]  = wave.getStep(_afsk.orig.freq[MARK]);
+  _afsk.answ.step[SPACE] = wave.getStep(_afsk.answ.freq[SPACE]);
+  _afsk.answ.step[MARK]  = wave.getStep(_afsk.answ.freq[MARK]);
 }
 
 /**
@@ -172,11 +165,11 @@ inline void AFSK::DAC(uint8_t sample) {
   the next sample.
 */
 void AFSK::txHandle() {
-  // First thing first: get the sample
-  uint8_t sample = wave.sample(tx.idx);
-
   // Check if we are transmitting
   if (tx.active == ON or _carrier == ON) {
+    // First thing first: get the sample
+    uint8_t sample = wave.sample(tx.idx);
+
     // Output the sample
     DAC(sample);
     // Step up the index for the next sample
@@ -281,6 +274,22 @@ void AFSK::txHandle() {
           }
           break;
       }
+    }
+  }
+  // Check if we are tone dialing
+  else if (_dialing) {
+    // Check the FIFO for dial numbers
+    if (txFIFO.empty())
+      // No more digits, stop dialing
+      _dialing = OFF;
+    else {
+      // Get the DTMF sample, if any
+      if (dtmf.getSample())
+        // Send the sample to DAC
+        DAC(dtmf.sample);
+      else
+        // Create the samples for the next char
+        dtmf.send(txFIFO.out());
     }
   }
 }
@@ -575,6 +584,8 @@ void AFSK::doTXRX() {
 void AFSK::setDirection(uint8_t dir, uint8_t rev) {
   // Keep the direction
   _dir = dir;
+  // Stop the carrier
+  this->setCarrier(OFF);
   // Create TX/RX pointers to ORIGINATING/ANSWERING parameters
   if ((_dir == ORIGINATING and rev == OFF) or
       (_dir == ANSWERING and _cfg->revans == ON)) {
@@ -628,6 +639,22 @@ void AFSK::setMode(uint8_t mode) {
 */
 void AFSK::setCarrier(uint8_t onoff) {
   _carrier = onoff & _cfg->txcarr;
+}
+
+/**
+  Dial a number
+
+  @param number the number to dial
+*/
+void AFSK::dial(char *buf) {
+  // Disable the carrier
+  this->setCarrier(OFF);
+  // Store the dial number in TX FIFO
+  txFIFO.clear();
+  while (*buf != 0)
+    txFIFO.in(*buf++);
+  // Start dialing
+  _dialing = ON;
 }
 
 /**

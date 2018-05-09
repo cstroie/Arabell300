@@ -30,16 +30,11 @@
 // The PWM pin may be 3 or 11 (Timer2)
 #define PWM_PIN 3
 
-// CPU frequency correction for sampling timer
-#define F_COR (-120000L)
-
-// Sampling frequency
-#define F_SAMPLE    9600
-
 #include <Arduino.h>
 #include "config.h"
 #include "fifo.h"
 #include "wave.h"
+#include "dtmf.h"
 
 // Mark and space bits
 enum BIT {SPACE, MARK};
@@ -216,10 +211,9 @@ class AFSK {
     void setOnline(uint8_t online);
     void setMode(uint8_t mode);
     void setCarrier(uint8_t onoff);
+    void dial(char *buf);
     void doTXRX();
     bool doSIO();
-
-    uint8_t getWaveStep(uint32_t freq);
 
     void simFeed();             // Simulation
     void simPrint();
@@ -232,6 +226,7 @@ class AFSK {
     uint8_t _mode     = COMMAND_MODE;   // Modem works in data mode or in command mode
     uint8_t _dir      = ORIGINATING;
     uint8_t _carrier  = OFF;
+    uint8_t _dialing  = OFF;
     uint8_t fulBit, hlfBit, qrtBit, octBit;
 
     TX_t tx;
