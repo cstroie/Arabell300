@@ -27,7 +27,7 @@
 WAVE wave;
 
 // The DTMF wave generator
-DTMF dtmf(40, 40);
+DTMF dtmf(250, 250);
 
 // FIFOs
 FIFO txFIFO(6);
@@ -169,7 +169,6 @@ void AFSK::txHandle() {
   if (tx.active == ON or _carrier == ON) {
     // First thing first: get the sample
     uint8_t sample = wave.sample(tx.idx);
-
     // Output the sample
     DAC(sample);
     // Step up the index for the next sample
@@ -278,19 +277,16 @@ void AFSK::txHandle() {
   }
   // Check if we are tone dialing
   else if (_dialing) {
-    // Check the FIFO for dial numbers
-    if (txFIFO.empty())
-      // No more digits, stop dialing
+    // Get the DTMF sample
+    if (dtmf.getSample())
+      // Send the sample to DAC
+      DAC(dtmf.sample);
+    else if (not txFIFO.empty())
+      // Check the FIFO for dial numbers
+      dtmf.send(txFIFO.out());
+    else
+      // Stop dialing
       _dialing = OFF;
-    else {
-      // Get the DTMF sample, if any
-      if (dtmf.getSample())
-        // Send the sample to DAC
-        DAC(dtmf.sample);
-      else
-        // Create the samples for the next char
-        dtmf.send(txFIFO.out());
-    }
   }
 }
 
@@ -655,6 +651,9 @@ void AFSK::dial(char *buf) {
     txFIFO.in(*buf++);
   // Start dialing
   _dialing = ON;
+  // Block until dialing is over
+  while (_dialing == ON)
+    delay(10);
 }
 
 /**
