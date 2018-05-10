@@ -325,6 +325,7 @@ void HAYES::dispatch() {
       // Phase 2: Go online, check dialtone / busy (NO_DIALTONE / BUSY)
       _afsk->setOnline(ON);
       // Phase 3: Dial: DTMF/Pulses
+      _afsk->dial("1159");
       // Phase 4: Wait for RX carrier (NO_CARRIER)
       // Phase 5: Enable TX carrier (if not already)
       _afsk->setCarrier(ON);
@@ -390,6 +391,8 @@ void HAYES::dispatch() {
           rqInfo = rqInfo >> 1;
 
           // 4 Data connection info
+          if (rqInfo & 0x01)
+            print_P(FTRS,  true);
           rqInfo = rqInfo >> 1;
 
           // 5 Regional Settings
@@ -458,6 +461,8 @@ void HAYES::dispatch() {
 
     // ATZ Reset
     case 'Z':
+      // No more response messages
+      cmdResult = RC_NONE;
       //FIXME wdt_enable(WDTO_2S);
       // Wait for the prescaller time to expire
       // without sending the reset signal
