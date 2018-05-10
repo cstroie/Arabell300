@@ -40,7 +40,7 @@ FIFO::~FIFO() {
 }
 
 bool FIFO::_full() {
-  return ((i_out > i_in) ? (i_out - i_in == 1) : (i_out - i_in + _size == 1));
+  return ((_size + i_out - i_in) & _mask) == 1;
 }
 
 bool FIFO::full() {
@@ -64,7 +64,7 @@ bool FIFO::empty() {
 }
 
 uint8_t FIFO::_len() {
-  return ((i_out > i_in) ? (_size + i_in - i_out) : (i_in - i_out));
+  return (_size + i_in - i_out) & _mask;
 }
 
 uint8_t FIFO::len() {
