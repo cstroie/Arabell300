@@ -34,7 +34,7 @@
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Bell103";
-const char VERSION[]  PROGMEM = "v2.22";
+const char VERSION[]  PROGMEM = "v2.23";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DESCRP[]   PROGMEM = "Arduino emulated standard 300 baud modem";
 const char FTRS[]     PROGMEM = "a0000403F88004000\r\nb000008\r\nr1005100000000000";
@@ -56,10 +56,18 @@ struct CFG_t {
       uint8_t verbal: 1;  // ATV Verbose mode
       uint8_t selcpm: 1;  // ATX Select call progress method
       uint8_t revans: 1;  // AT&A Reverse answering frequencies
+
+      uint8_t sregs[16];  // The S registers
     };
     uint8_t data[cfgLen];
   };
 };
+
+// The S registers
+const uint8_t sRegs[16] PROGMEM = {0, 0, '+', '\r', '\n', '\t',
+                                   2, 30, 2, 6, 7, 75, 50,
+                                   0, 0, 0
+                                  };
 
 
 
@@ -75,6 +83,11 @@ class Profile {
     bool    read(CFG_t *cfg, bool useDefaults = false);
     bool    factory(CFG_t *cfg);
     void    init(CFG_t *cfg);
+
+    // S registers data and functions
+    uint8_t getS(CFG_t *cfg, uint8_t reg);
+    void    setS(CFG_t *cfg, uint8_t reg, uint8_t value);
+
 
   private:
     uint8_t crc(CFG_t *cfg);

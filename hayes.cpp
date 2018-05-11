@@ -29,6 +29,13 @@ HAYES::HAYES(CFG_t *cfg, AFSK *afsk): _cfg(cfg), _afsk(afsk) {
 HAYES::~HAYES() {
 }
 
+/**
+  Print \r\n, as configured in S registers
+*/
+void HAYES::printCRLF() {
+  Serial.write(_cfg->sregs[3]);
+  Serial.write(_cfg->sregs[4]);
+}
 
 /**
   Print a character array from program memory
@@ -36,13 +43,13 @@ HAYES::~HAYES() {
   @param str the character array to print
   @param eol print the EOL
 */
-void print_P(const char *str, bool newline = false) {
+void HAYES::print_P(const char *str, bool newline) {
   uint8_t val;
   do {
     val = pgm_read_byte(str++);
     if (val) Serial.write(val);
   } while (val);
-  if (newline) Serial.print(F("\r\n"));
+  if (newline) printCRLF();
 }
 
 /**
@@ -56,7 +63,6 @@ void print_P(const char *str, bool newline = false) {
 int16_t HAYES::getInteger(char* buf, int8_t idx, uint8_t len = 32) {
   int16_t result = 0;     // The result
   bool isNeg = false;     // Negative flag
-  static uint8_t ldx = 0; // Local index, static
   uint8_t sdx = 0;        // Start index
 
   // If the specified index is negative, use the last local index;
@@ -196,9 +202,6 @@ int8_t HAYES::getValidDigit(int8_t low, int8_t hgh, int8_t def) {
 }
 
 void HAYES::cmdPrint(char cmd, char mod, uint8_t value, bool newline) {
-  // Print the initial newline, if needed
-  if (newline and _cfg->verbal)
-    Serial.print(F("\r\n"));
   // Print the command
   if (cmd != '\0') {
     if (mod != '\0')
@@ -209,10 +212,10 @@ void HAYES::cmdPrint(char cmd, char mod, uint8_t value, bool newline) {
   // Print the value
   Serial.print(value);
   // Print the newline, if requested
-  if (newline) Serial.print(F("\r\n"));
+  if (newline) printCRLF();
   else         Serial.print(F("; "));
-  // No other response code
-  cmdResult = RC_NONE;
+  // Response code OK
+  cmdResult = RC_OK;
 }
 
 void HAYES::cmdPrint(char cmd, uint8_t value, bool newline) {
@@ -224,7 +227,30 @@ void HAYES::cmdPrint(uint8_t value) {
   cmdPrint(buf[idx - 1], value);
 }
 
+/**
+  Print a S register
+*/
+void HAYES::sregPrint(uint8_t r, bool newline) {
+  // Print the command
+  Serial.print(F("S"));
+  if (r < 10) Serial.print(F("0"));
+  Serial.print(r);
+  Serial.print(F(": "));
+  // Print the value
+  if (_cfg->sregs[r] < 100)
+    Serial.print(F("0"));
+  if (_cfg->sregs[r] < 10)
+    Serial.print(F("0"));
+  Serial.print(_cfg->sregs[r]);
+  // Print the newline, if requested
+  if (newline) printCRLF();
+  else         Serial.print(F("; "));
+  // Response code OK
+  cmdResult = RC_OK;
+}
+
 void HAYES::showProfile(CFG_t *cfg) {
+  // Print the main configuration
   cmdPrint('B', cfg->compro, false);
   cmdPrint('C', cfg->txcarr, false);
   cmdPrint('E', cfg->cmecho, false);
@@ -234,7 +260,13 @@ void HAYES::showProfile(CFG_t *cfg) {
   cmdPrint('Q', cfg->quiet,  false);
   cmdPrint('V', cfg->verbal, false);
   cmdPrint('X', cfg->selcpm, false);
-  Serial.print(F("\r\n"));
+  printCRLF();
+  // Print the S registers
+  for (uint8_t r = 0; r < 16; r++) {
+    sregPrint(r, false);
+    if (r == 0x07 or r == 0x0F)
+      printCRLF();
+  }
 }
 
 void HAYES::doCommand() {
@@ -361,8 +393,6 @@ void HAYES::dispatch() {
         // Get the digit value
         uint8_t value = getValidDigit(0, 7, 0);
         if (cmdResult == RC_OK) {
-          // No more response messages
-          cmdResult = RC_NONE;
           // Specify the line to display
           rqInfo = 0x01 << value;
 
@@ -441,6 +471,26 @@ void HAYES::dispatch() {
         cmdPrint(_cfg->quiet);
       else
         _cfg->quiet = getValidDigit(0, 1, _cfg->quiet);
+      break;
+
+    // ATS Addresses An S-register
+    case 'S':
+      // Get the register number
+      _sreg = getValidInteger(0, 15, 255);
+      if (_sreg == 255) {
+        _sreg = 0;
+        cmdResult = RC_ERROR;
+      }
+      else {
+        // Move the index to the last local index
+        idx = ldx;
+        // Check the next character
+        if (buf[idx] == '?')
+          sregPrint(_sreg, true);
+        else if (buf[idx] == '=') {
+          _cfg->sregs[_sreg] = getValidInteger(0, 255, _cfg->sregs[_sreg]);
+        }
+      }
       break;
 
     // ATV Verbose mode
@@ -527,7 +577,7 @@ uint8_t HAYES::doSIO() {
       buf[len++] = c;
       // Check for EOL
       if (c == '\r' or c == '\n') {
-        //Serial.print(F("\r\n"));
+        //printCRLF();
         // Check the next character
         c = Serial.peek();
         // If newline, consume it
@@ -558,12 +608,12 @@ uint8_t HAYES::doSIO() {
 void HAYES::printResult(uint8_t code) {
   if (code != RC_NONE and _cfg->quiet != 1)
     if (_cfg->verbal) {
-      Serial.print(F("\r\n"));
+      printCRLF();
       print_P(rcMsg[code]);
-      Serial.print(F("\r\n"));
+      printCRLF();
     }
     else {
       Serial.print(code);
-      Serial.print(F("\r"));
+      printCRLF();
     }
 }

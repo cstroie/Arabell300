@@ -20,14 +20,8 @@
 #include "dtmf.h"
 
 DTMF::DTMF(uint8_t pulse, uint8_t pause) {
-  // Compute the wave steps
-  for (uint8_t i = 0; i < ROWSCOLS; i++) {
-    stpRows[i] = wave.getStep(frqRows[i]);
-    stpCols[i] = wave.getStep(frqCols[i]);
-  }
-  // Compute the pulse and pause samples
-  lenPulse = (uint32_t)pulse * F_SAMPLE / 1000;
-  lenPause = (uint32_t)pause * F_SAMPLE / 1000;
+  // Set the duration
+  this->setDuration(pulse, pause);
   // Initialize the indices
   rowIdx = 0;
   colIdx = 0;
@@ -38,6 +32,21 @@ DTMF::DTMF(uint8_t pulse, uint8_t pause) {
 DTMF::~DTMF() {
 }
 
+/**
+  Set DTMF digit duration and the silence interval between adjacent digits
+*/
+void DTMF::setDuration(uint8_t pulse, uint8_t pause) {
+  // Make the pause equal to pulse, if not specified
+  if (pause == 0) pause = pulse;
+  // Compute the wave steps
+  for (uint8_t i = 0; i < ROWSCOLS; i++) {
+    stpRows[i] = wave.getStep(frqRows[i]);
+    stpCols[i] = wave.getStep(frqCols[i]);
+  }
+  // Compute the pulse and pause samples
+  lenPulse = (uint32_t)pulse * F_SAMPLE / 1000;
+  lenPause = (uint32_t)pause * F_SAMPLE / 1000;
+}
 
 bool DTMF::getSample() {
   if (state == 1) {

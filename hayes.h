@@ -58,6 +58,9 @@ class HAYES {
     HAYES(CFG_t *cfg, AFSK *afsk);
     ~HAYES();
 
+    void printCRLF();
+    void print_P(const char *str, bool newline = false);
+
     int16_t getInteger(char* buf, int8_t idx, uint8_t len = 32);
     int16_t getValidInteger(char* buf, uint8_t idx, int16_t low, int16_t hgh, int16_t def = 0, uint8_t len = 32);
     int16_t getValidInteger(int16_t low, int16_t hgh, int16_t def = 0, uint8_t len = 32);
@@ -81,8 +84,13 @@ class HAYES {
     int8_t len = 0;
     // Buffer index
     uint8_t idx = 0;
+    // Local index
+    uint8_t ldx = 0;
     // Numeric value
     int8_t value = 0;
+
+    // One specific S register
+    uint8_t _sreg = 0;
 
     // The result status of the last command
     uint8_t cmdResult = RC_OK;
@@ -90,6 +98,7 @@ class HAYES {
     void    cmdPrint(char cmd, uint8_t value, bool newline = true);
     void    cmdPrint(char cmd, char mod, uint8_t value, bool newline = true);
     void    cmdPrint(uint8_t value);
+    void    sregPrint(uint8_t r, bool newline = false);
 
     void    showProfile(CFG_t *cfg);
 

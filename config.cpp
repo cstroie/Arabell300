@@ -90,7 +90,8 @@ bool Profile::write(CFG_t *cfg) {
   EEPROM.get(eeAddress, cfgTemp.data);
   // Compute the CRC8 checksum of the read data
   uint8_t crc8 = this->crc(&cfgTemp);
-  // Compute the CRC8 checksum of the actual data
+  // Compute the CRC8 checksum of the actual data, make sure S1 is zero
+  cfg->sregs[1] = 0;
   cfg->crc8 = this->crc(cfg);
   // Compare the new and the stored data and check if the stored data is valid
   if (not this->equal(cfg, &cfgTemp) or (cfgTemp.crc8 != crc8)) {
@@ -114,9 +115,9 @@ bool Profile::read(CFG_t *cfg, bool useDefaults = false) {
   EEPROM.get(eeAddress, cfgTemp);
   // Compute the CRC8 checksum of the read data
   uint8_t crc8 = this->crc(&cfgTemp);
-  // And compare with the read crc8 checksum
-  if (cfgTemp.crc8 == crc8) {
-    // Copy the temporary structure to configuration and the crc8, too
+  // And compare with the read crc8 checksum, also check S1
+  if (cfgTemp.crc8 == crc8 and cfgTemp.sregs[1] == 0) {
+    // Copy the temporary structure to configuration and the crc8
     for (uint8_t i = 0; i < cfgLen; i++)
       cfg->data[i] = cfgTemp.data[i];
   }
@@ -129,6 +130,7 @@ bool Profile::read(CFG_t *cfg, bool useDefaults = false) {
   Reset the configuration to factory defaults
 */
 bool Profile::factory(CFG_t *cfg) {
+  // Set the configuration
   cfg->compro = 0x10; // ATB
   cfg->txcarr = 0x01; // ATC
   cfg->cmecho = 0x01; // ATE
@@ -139,8 +141,27 @@ bool Profile::factory(CFG_t *cfg) {
   cfg->verbal = 0x01; // ATV
   cfg->selcpm = 0x00; // ATX
   cfg->revans = 0x00; // AT&A
+
+  // Set the S regs
+  memcpy_P(&cfg->sregs, &sRegs, 16);
+
+  //Always return true
   return true;
 };
+
+/**
+   Get the specfied S register value
+*/
+uint8_t Profile::getS(CFG_t *cfg, uint8_t reg) {
+  return cfg->sregs[reg];
+}
+
+/**
+   Get the specfied S register value
+*/
+void  Profile::setS(CFG_t *cfg, uint8_t reg, uint8_t value) {
+  cfg->sregs[reg] = value;
+}
 
 /**
   Try to load the stored profile or use the factory defaults

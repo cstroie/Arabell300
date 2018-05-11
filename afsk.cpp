@@ -27,7 +27,7 @@
 WAVE wave;
 
 // The DTMF wave generator
-DTMF dtmf(250, 250);
+DTMF dtmf;
 
 // FIFOs
 FIFO txFIFO(6);
@@ -52,6 +52,8 @@ void AFSK::init(AFSK_t afsk, CFG_t *cfg) {
   this->initHW();
   // Set the modem type
   this->setModemType(afsk);
+  // Set the DTMF pulse and pause durations (S11)
+  dtmf.setDuration(_cfg->sregs[11]);
 }
 
 /**
@@ -490,11 +492,12 @@ bool AFSK::doSIO() {
   // Check if we saw the escape string "+++"
   if (escCount == 3) {
     // We did, we did taw the escape string!
-    // Check for the guard silence
-    if (millis() - escLast > 1000) {
+    // Check for the guard silence (S12)
+    if (millis() - escLast > _cfg->sregs[12] * 20) {
       // This is it, go in command mode
       this->setMode(COMMAND_MODE);
       escCount = 0;
+      Serial.print("\r\nOK\r\n");
     }
     else if (available) {
       // We saw the string recently, check if there is any
@@ -511,10 +514,10 @@ bool AFSK::doSIO() {
 
   // Check if there is any data on serial port
   if (available) {
-    // Check for "+++" escape sequence
-    if (Serial.peek() == '+') {
-      // Check when we saw the first '+'
-      if (millis() - escFirst > 1000) {
+    // Check for "+++" escape sequence (S2)
+    if (Serial.peek() == _cfg->sregs[2]) {
+      // Check when we saw the first '+' (S12)
+      if (millis() - escFirst > _cfg->sregs[12] * 20) {
         // This is the first, keep the time
         escCount = 1;
         escFirst = millis();

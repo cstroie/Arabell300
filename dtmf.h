@@ -38,7 +38,7 @@ static const char dtmfRowsCols[ROWSCOLS][ROWSCOLS] = {
 
 class DTMF {
   public:
-    DTMF(uint8_t pulse, uint8_t pause);
+    DTMF(uint8_t pulse = 40, uint8_t pause = 40);
     ~DTMF();
 
     // The resulting sample
@@ -47,6 +47,7 @@ class DTMF {
     bool getSample();
     char send(char chr);
     uint8_t send(char *chrs, size_t len);
+    void setDuration(uint8_t pulse, uint8_t pause = 0);
 
   private:
     // The DTMF wave generator
