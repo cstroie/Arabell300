@@ -202,7 +202,7 @@ void AFSK::txHandle() {
         // We are sending the preamble carrier
         case PREAMBLE:
           // Check if we have sent the carrier long enough
-          if (++tx.bits >= carBits) {
+          if (++tx.bits >= carBits or _carrier == ON) {
             // Carrier sent, go to the start bit (SPACE)
             tx.state  = START_BIT;
             tx.dtbit  = SPACE;
@@ -535,10 +535,11 @@ bool AFSK::doSIO() {
   }
 
   if (this->_mode != COMMAND_MODE) {
-    if (available) {
-      // There is data on serial port, process it normally
-      if (not txFIFO.full()) {
-        // FIFO not full, we can send the data
+    // Check if the FIFO still not full
+    if (txFIFO.len() < 48) {
+      // Check if we can take the byte
+      if (available and (txFIFO.len() < 32 or (not flowControl))) {
+        // There is data on serial port, process it normally
         c = Serial.read();
         if (txFIFO.in(c))
           // Local data mode echo
@@ -549,6 +550,18 @@ bool AFSK::doSIO() {
         // TX led on
         PORTB |= _BV(PORTB1);
       }
+    }
+    else if (not flowControl) {
+      // Send the XOFF byte
+      Serial.write(0x13);
+      //Serial.write('S');
+      flowControl = true;
+    }
+
+    if (txFIFO.len() < 16 and flowControl) {
+      Serial.write(0x11);
+      //Serial.write('Q');
+      flowControl = false;
     }
 
     // Check if there is any data in RX FIFO

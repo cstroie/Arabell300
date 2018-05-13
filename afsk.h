@@ -229,6 +229,10 @@ class AFSK {
     uint8_t _dialing  = OFF;
     uint8_t fulBit, hlfBit, qrtBit, octBit;
 
+    // Serial flow control tracking status
+    bool flowControl = false;
+
+
     TX_t tx;
     RX_t rx;
 
