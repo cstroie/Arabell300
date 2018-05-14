@@ -556,7 +556,7 @@ bool AFSK::doSIO() {
         PORTB |= _BV(PORTB1);
       }
     }
-    else if (not flowControl) {
+    else if (not flowControl and _cfg->flwctr != 0) {
       // FIFO is getting full, check the flow control
       if (_cfg->flwctr = 4)
         // XON/XOFF flow control: XOFF
@@ -596,9 +596,14 @@ bool AFSK::doSIO() {
   Handle both the TX and RX, if in data mode
 */
 void AFSK::doTXRX() {
+  static uint8_t analog;
   if (this->_online) {
+    // Get the sample first
+    analog = ADCH;
+    // Handle TX (constant delay)
     this->txHandle();
-    this->rxHandle(ADCH);
+    // Finally, handle RX
+    this->rxHandle(analog);
   }
 }
 
