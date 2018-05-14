@@ -34,7 +34,7 @@
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Bell103";
-const char VERSION[]  PROGMEM = "v2.24";
+const char VERSION[]  PROGMEM = "v2.25";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DESCRP[]   PROGMEM = "Arduino emulated standard 300 baud modem";
 const char FTRS[]     PROGMEM = "a0000403F88004000\r\nb000008\r\nr1005100000000000";
@@ -71,7 +71,7 @@ struct CFG_t {
 };
 
 // The S registers
-const uint8_t sRegs[16] PROGMEM = {0, 0, '+', '\r', '\n', '\t',
+const uint8_t sRegs[16] PROGMEM = {0, 0, '+', '\r', '\n', '\b',
                                    2, 30, 2, 6, 7, 75, 50,
                                    0, 0, 0
                                   };
