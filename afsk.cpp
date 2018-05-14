@@ -30,8 +30,12 @@ WAVE wave;
 DTMF dtmf;
 
 // FIFOs
-FIFO txFIFO(6);
-FIFO rxFIFO(6);
+const uint8_t fifoSize = 6;
+const uint8_t fifoLow =  1 << (fifoSize - 2);
+const uint8_t fifoMed =  1 << (fifoSize - 1);
+const uint8_t fifoHgh = (1 << fifoSize) - fifoLow;
+FIFO txFIFO(fifoSize);
+FIFO rxFIFO(fifoSize);
 FIFO dyFIFO(4);
 
 
@@ -534,17 +538,18 @@ bool AFSK::doSIO() {
     }
   }
 
+  // Only in data mode
   if (this->_mode != COMMAND_MODE) {
-    // Check if the FIFO still not full
-    if (txFIFO.len() < 48) {
+    // Check if the FIFO is not getting full
+    if (txFIFO.len() < fifoHgh) {
       // Check if we can take the byte
-      if (available and (txFIFO.len() < 32 or (not flowControl))) {
+      if (available and (txFIFO.len() < fifoMed or (not flowControl))) {
         // There is data on serial port, process it normally
         c = Serial.read();
         if (txFIFO.in(c))
           // Local data mode echo
           if (_cfg->dtecho)
-            Serial.print((char)c);
+            Serial.write((char)c);
         // Keep transmitting
         tx.active = ON;
         // TX led on
@@ -552,15 +557,24 @@ bool AFSK::doSIO() {
       }
     }
     else if (not flowControl) {
-      // Send the XOFF byte
-      Serial.write(0x13);
-      //Serial.write('S');
+      // FIFO is getting full, check the flow control
+      if (_cfg->flwctr = 4)
+        // XON/XOFF flow control: XOFF
+        Serial.write(0x13);
+      else if (_cfg->flwctr = 3)
+        // RTS/CTS flow control
+        PORTB &= ~_BV(PORTB2);
       flowControl = true;
     }
 
-    if (txFIFO.len() < 16 and flowControl) {
-      Serial.write(0x11);
-      //Serial.write('Q');
+    // Anytime, try to disable flow control, if we can
+    if (flowControl and txFIFO.len() < fifoLow) {
+      if (_cfg->flwctr = 4)
+        // XON/XOFF flow control: XON
+        Serial.write(0x11);
+      else if (_cfg->flwctr = 3)
+        // RTS/CTS flow control
+        PORTB |= _BV(PORTB2);
       flowControl = false;
     }
 
