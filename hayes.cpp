@@ -61,9 +61,11 @@ void HAYES::print_P(const char *str, bool newline) {
   @return the integer found or zero
 */
 int16_t HAYES::getInteger(char* buf, int8_t idx, uint8_t len = 32) {
-  int16_t result = 0;     // The result
-  bool isNeg = false;     // Negative flag
-  uint8_t sdx = 0;        // Start index
+  int16_t result  = 0;      // The result
+  bool    isNeg   = false;  // Negative flag
+  uint8_t sdx     = 0;      // Start index
+
+  cmdResult = RC_OK;
 
   // If the specified index is negative, use the last local index;
   // if it is positive, re-set the local index
@@ -80,7 +82,7 @@ int16_t HAYES::getInteger(char* buf, int8_t idx, uint8_t len = 32) {
          and (not isdigit(buf[ldx])))
     ldx++;
   // At this point, check if we have ended the buffer or the length
-  if ((ldx - sdx < len) and (buf[ldx] != 0)) {
+  if ((ldx - sdx <= len) and (buf[ldx] != 0)) {
     // Might start with '+' or '-', keep the sign and move forward
     // only if the sign is the first character ever
     if (buf[ldx] == '-') {
@@ -93,12 +95,17 @@ int16_t HAYES::getInteger(char* buf, int8_t idx, uint8_t len = 32) {
     }
     // Parse the digits
     while ((isdigit(buf[ldx]))
-           and (ldx - sdx < len)
+           and (ldx - sdx <= len)
            and (buf[ldx] != 0)) {
       // Build the result
       result = (result * 10) + (buf[ldx] - '0');
       // Move forward
       ldx++;
+    }
+    // Buffer check
+    if (ldx - sdx > len) {
+      // Break because length exceeded
+      cmdResult = RC_ERROR;
     }
     // Check if negative
     if (isNeg)
@@ -129,7 +136,7 @@ int16_t HAYES::getValidInteger(char* buf, uint8_t idx, int16_t low, int16_t hgh,
   // Get the integer value
   int16_t res = getInteger(buf, (int8_t)idx, len);
   // Check if valid
-  if ((res < low) or (res > hgh)) {
+  if ((cmdResult != RC_OK) or (res < low) or (res > hgh)) {
     res = def;
     cmdResult = RC_ERROR;
   }
@@ -366,6 +373,7 @@ void HAYES::dispatch() {
       // Phase 2: Go online, check dialtone / busy (NO_DIALTONE / BUSY)
       _afsk->setOnline(ON);
       // Phase 3: Dial: DTMF/Pulses
+      //_afsk->dial("1159");
       // Phase 4: Wait for RX carrier (NO_CARRIER)
       // Phase 5: Enable TX carrier (if not already)
       _afsk->setCarrier(ON);
@@ -484,7 +492,7 @@ void HAYES::dispatch() {
     // ATS Addresses An S-register
     case 'S':
       // Get the register number
-      _sreg = getValidInteger(0, 15, 255);
+      _sreg = getValidInteger(0, 15, 255, (uint8_t)2);
       if (_sreg == 255) {
         _sreg = 0;
         cmdResult = RC_ERROR;
@@ -496,7 +504,8 @@ void HAYES::dispatch() {
         if (buf[idx] == '?')
           sregPrint(_sreg, true);
         else if (buf[idx] == '=') {
-          _cfg->sregs[_sreg] = getValidInteger(0, 255, _cfg->sregs[_sreg]);
+          idx++;
+          _cfg->sregs[_sreg] = getValidInteger(0, 255, _cfg->sregs[_sreg], (uint8_t)3);
         }
       }
       break;
@@ -636,17 +645,18 @@ uint8_t HAYES::doSIO() {
       c = toupper(c);
       // Local terminal command mode echo
       if (_cfg->cmecho)
-        Serial.print(c);
+        Serial.write(c);
       // Append to buffer
       buf[len++] = c;
       // Check for EOL
       if (c == '\r' or c == '\n') {
-        //printCRLF();
         // Check the next character
         c = Serial.peek();
         // If newline, consume it
         if (c == '\r' or c == '\n')
           Serial.read();
+        // Send the newline
+        printCRLF();
         // Make sure the last char is null
         len--;
         buf[len] = '\0';
