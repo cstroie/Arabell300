@@ -46,7 +46,7 @@ struct CFG_t {
   union {
     struct {
       uint8_t crc8  : 8;  // CRC8 of the following data
-      uint8_t compro: 5;  // ATB Select Communication Protocol
+      uint8_t compro: 5;  // ATB Select communication protocol
       uint8_t txcarr: 1;  // ATC Keep a carrier going when transmitting
       uint8_t cmecho: 1;  // ATE Local command mode echo
       uint8_t dtecho: 1;  // ATF Local data mode echo
@@ -56,6 +56,13 @@ struct CFG_t {
       uint8_t verbal: 1;  // ATV Verbose mode
       uint8_t selcpm: 1;  // ATX Select call progress method
       uint8_t revans: 1;  // AT&A Reverse answering frequencies
+      uint8_t dcdopt: 1;  // AT&C DCD option selection
+      uint8_t dtropt: 2;  // AT&D DTR option selection
+      uint8_t flwctr: 3;  // AT&K Flow control selection
+      uint8_t lnetpe: 1;  // AT&L Line type slection
+      uint8_t plsrto: 2;  // AT&P Make/Break ratio for pulse dialing
+      uint8_t rtsopt: 1;  // AT&R RTS/CTS option selection
+      uint8_t dsropt: 2;  // AT&S DSR option selection
 
       uint8_t sregs[16];  // The S registers
     };

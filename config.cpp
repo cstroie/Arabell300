@@ -141,6 +141,13 @@ bool Profile::factory(CFG_t *cfg) {
   cfg->verbal = 0x01; // ATV
   cfg->selcpm = 0x00; // ATX
   cfg->revans = 0x00; // AT&A
+  cfg->dcdopt = 0x01; // AT&C
+  cfg->dtropt = 0x01; // AT&D
+  cfg->flwctr = 0x00; // AT&K
+  cfg->lnetpe = 0x00; // AT&L
+  cfg->plsrto = 0x00; // AT&P
+  cfg->rtsopt = 0x00; // AT&R
+  cfg->dsropt = 0x00; // AT&S
 
   // Set the S regs
   memcpy_P(&cfg->sregs, &sRegs, 16);

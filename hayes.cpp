@@ -261,6 +261,15 @@ void HAYES::showProfile(CFG_t *cfg) {
   cmdPrint('V', cfg->verbal, false);
   cmdPrint('X', cfg->selcpm, false);
   printCRLF();
+  cmdPrint('A', '&', cfg->revans, false);
+  cmdPrint('C', '&', cfg->dcdopt, false);
+  cmdPrint('D', '&', cfg->dtropt, false);
+  cmdPrint('K', '&', cfg->flwctr, false);
+  cmdPrint('L', '&', cfg->lnetpe, false);
+  cmdPrint('P', '&', cfg->plsrto, false);
+  cmdPrint('R', '&', cfg->rtsopt, false);
+  cmdPrint('S', '&', cfg->dsropt, false);
+  printCRLF();
   // Print the S registers
   for (uint8_t r = 0; r < 16; r++) {
     sregPrint(r, false);
@@ -357,7 +366,6 @@ void HAYES::dispatch() {
       // Phase 2: Go online, check dialtone / busy (NO_DIALTONE / BUSY)
       _afsk->setOnline(ON);
       // Phase 3: Dial: DTMF/Pulses
-      _afsk->dial("1159");
       // Phase 4: Wait for RX carrier (NO_CARRIER)
       // Phase 5: Enable TX carrier (if not already)
       _afsk->setCarrier(ON);
@@ -530,9 +538,65 @@ void HAYES::dispatch() {
             _cfg->revans = getValidDigit(0, 1, _cfg->revans);
           break;
 
+        // DCD Option
+        case 'C':
+          if (buf[idx] == '?')
+            cmdPrint('C', '&', _cfg->dcdopt);
+          else
+            _cfg->dcdopt = getValidDigit(0, 1, _cfg->dcdopt);
+          break;
+
+        // DTR Option
+        case 'D':
+          if (buf[idx] == '?')
+            cmdPrint('D', '&', _cfg->dtropt);
+          else
+            _cfg->dtropt = getValidDigit(0, 3, _cfg->dtropt);
+          break;
+
         // Factory defaults
         case 'F':
           cmdResult = profile.factory(_cfg) ? RC_OK : RC_ERROR;
+          break;
+
+        // Flow Control Selection
+        case 'K':
+          if (buf[idx] == '?')
+            cmdPrint('K', '&', _cfg->flwctr);
+          else
+            _cfg->flwctr = getValidDigit(0, 6, _cfg->flwctr);
+          break;
+
+        // Line Type Selection
+        case 'L':
+          if (buf[idx] == '?')
+            cmdPrint('L', '&', _cfg->lnetpe);
+          else
+            _cfg->lnetpe = getValidDigit(0, 1, _cfg->lnetpe);
+          break;
+
+        // Make/Break Ratio for Pulse Dialing
+        case 'P':
+          if (buf[idx] == '?')
+            cmdPrint('P', '&', _cfg->plsrto);
+          else
+            _cfg->plsrto = getValidDigit(0, 3, _cfg->plsrto);
+          break;
+
+        // RTS/CTS Option Selection
+        case 'R':
+          if (buf[idx] == '?')
+            cmdPrint('R', '&', _cfg->rtsopt);
+          else
+            _cfg->rtsopt = getValidDigit(0, 1, _cfg->rtsopt);
+          break;
+
+        // DSR Option Selection
+        case 'S':
+          if (buf[idx] == '?')
+            cmdPrint('S', '&', _cfg->dsropt);
+          else
+            _cfg->dsropt = getValidDigit(0, 2, _cfg->dsropt);
           break;
 
         // Show the configuration
