@@ -214,13 +214,12 @@ void HAYES::cmdPrint(char cmd, char mod, uint8_t value, bool newline) {
     if (mod != '\0')
       Serial.print(mod);
     Serial.print(cmd);
-    Serial.print(F(": "));
   }
   // Print the value
   Serial.print(value);
   // Print the newline, if requested
   if (newline) printCRLF();
-  else         Serial.print(F("; "));
+  else         Serial.print(F(" "));
   // Response code OK
   cmdResult = RC_OK;
 }
@@ -242,7 +241,7 @@ void HAYES::sregPrint(uint8_t r, bool newline) {
   Serial.print(F("S"));
   if (r < 10) Serial.print(F("0"));
   Serial.print(r);
-  Serial.print(F(": "));
+  Serial.print(F(":"));
   // Print the value
   if (_cfg->sregs[r] < 100)
     Serial.print(F("0"));
@@ -251,7 +250,7 @@ void HAYES::sregPrint(uint8_t r, bool newline) {
   Serial.print(_cfg->sregs[r]);
   // Print the newline, if requested
   if (newline) printCRLF();
-  else         Serial.print(F("; "));
+  else         Serial.print(F(" "));
   // Response code OK
   cmdResult = RC_OK;
 }
