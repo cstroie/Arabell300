@@ -227,6 +227,9 @@ class AFSK {
     uint8_t _dir      = ORIGINATING;
     uint8_t _carrier  = OFF;
     uint8_t _dialing  = OFF;
+
+    uint16_t _guard;
+
     uint8_t fulBit, hlfBit, qrtBit, octBit;
 
     // Serial flow control tracking status

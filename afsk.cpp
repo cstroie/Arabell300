@@ -58,6 +58,8 @@ void AFSK::init(AFSK_t afsk, CFG_t *cfg) {
   this->setModemType(afsk);
   // Set the DTMF pulse and pause durations (S11)
   dtmf.setDuration(_cfg->sregs[11]);
+  // Set the guard time
+  _guard = _cfg->sregs[12] * 20;
 }
 
 /**
@@ -490,14 +492,19 @@ bool AFSK::doSIO() {
   static uint8_t  escCount = 0;
   static uint32_t escFirst = 0;
   static uint32_t escLast  = 0;
+  static uint32_t lstChar  = 0;
+  static uint32_t now      = 0;
   // Characters waiting on the serial input
   bool available = (Serial.available() != 0);
+
+  // The time
+  now = millis();
 
   // Check if we saw the escape string "+++"
   if (escCount == 3) {
     // We did, we did taw the escape string!
     // Check for the guard silence (S12)
-    if (millis() - escLast > _cfg->sregs[12] * 20) {
+    if (now - escLast > _cfg->sregs[12] * 20) {
       // This is it, go in command mode
       this->setMode(COMMAND_MODE);
       escCount = 0;
@@ -521,10 +528,13 @@ bool AFSK::doSIO() {
     // Check for "+++" escape sequence (S2)
     if (Serial.peek() == _cfg->sregs[2]) {
       // Check when we saw the first '+' (S12)
-      if (millis() - escFirst > _cfg->sregs[12] * 20) {
-        // This is the first, keep the time
-        escCount = 1;
-        escFirst = millis();
+      if (now - escFirst > _guard) {
+        // Check the before guard time too
+        if (now - lstChar >= _guard) {
+          // This is the first, keep the time
+          escCount = 1;
+          escFirst = now;
+        }
       }
       else {
         // Not the first, count them up until three
@@ -532,7 +542,7 @@ bool AFSK::doSIO() {
         if (escCount == 3) {
           // This is the last, keep the time and go wait
           // for the guard silence
-          escLast = millis();
+          escLast = now;
         }
       }
     }
@@ -550,6 +560,8 @@ bool AFSK::doSIO() {
           // Local data mode echo
           if (_cfg->dtecho)
             Serial.write((char)c);
+        // Keep the time
+        lstChar = now;
         // Keep transmitting
         tx.active = ON;
         // TX led on
