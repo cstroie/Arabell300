@@ -289,9 +289,12 @@ void AFSK::txHandle() {
     if (dtmf.getSample())
       // Send the sample to DAC
       DAC(dtmf.sample);
-    else if (not txFIFO.empty())
+    else if (not txFIFO.empty()) {
       // Check the FIFO for dial numbers
-      dtmf.send(txFIFO.out());
+      char c = txFIFO.out();
+      if (c != ',')
+        dtmf.send(c);
+    }
     else
       // Stop dialing
       _dialing = OFF;

@@ -100,6 +100,13 @@ class HAYES {
     void    cmdPrint(uint8_t value);
     void    sregPrint(uint8_t r, bool newline = false);
 
+
+    bool    dialModeCommand   = false;
+    bool    dialModeReverse   = false;
+    bool    dialModeTonePulse = true;
+    bool    getDialNumber(char *dn, size_t len);
+
+
     void    showProfile(CFG_t *cfg);
 
     void    printResult(uint8_t code);

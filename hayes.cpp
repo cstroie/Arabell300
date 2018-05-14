@@ -372,13 +372,25 @@ void HAYES::dispatch() {
       // Phase 2: Go online, check dialtone / busy (NO_DIALTONE / BUSY)
       _afsk->setOnline(ON);
       // Phase 3: Dial: DTMF/Pulses
-      //_afsk->dial("1159");
-      // Phase 4: Wait for RX carrier (NO_CARRIER)
-      // Phase 5: Enable TX carrier (if not already)
-      _afsk->setCarrier(ON);
-      // Phase 6: Enter data mode
-      _afsk->setMode(DATA_MODE);
-      cmdResult = RC_CONNECT;
+      {
+        char dn[21];
+        if (getDialNumber(dn, sizeof(dn) - 1)) {
+          // Dial the number
+          _afsk->dial(dn);
+          // Phase 4: Wait for RX carrier (NO_CARRIER)
+          // Phase 5: Enable TX carrier (if not already)
+          _afsk->setCarrier(ON);
+          // Phase 6: Enter data mode
+          if (dialModeCommand)
+            cmdResult = RC_OK;
+          else {
+            _afsk->setMode(DATA_MODE);
+            cmdResult = RC_CONNECT;
+          }
+        }
+        else
+          cmdResult = RC_ERROR;
+      }
       break;
 
     // ATE Set local command mode echo
@@ -631,6 +643,82 @@ void HAYES::dispatch() {
       }
       break;
   }
+}
+
+/**
+  Parse the line buffer and try to compose the dial number
+
+  @param dn the resulting dial number
+  @param len maximum dial number lenght
+  @return true if succeeeded
+*/
+bool HAYES::getDialNumber(char *dn, size_t len) {
+  bool result = true;
+  uint8_t ndx = 0;
+  uint8_t mode = 0;
+
+  // Reset defaults
+  dialModeReverse = false;
+  dialModeCommand = false;
+
+  while (buf[idx] != '\0' and result == true) {
+    if (buf[idx] == ' ' or
+        buf[idx] == '-' or
+        buf[idx] == '.' or
+        buf[idx] == '(' or
+        buf[idx] == ')') {
+      // Skip over some characters
+      idx++;
+    }
+    else if (buf[idx] == 'T' and ndx == 0) {
+      // Tone dialing mode, first character
+      if (mode == 0) {
+        mode = 1;
+        dialModeTonePulse = true;
+        idx++;
+      }
+      else
+        result = false;
+    }
+    else if (buf[idx] == 'P' and ndx == 0) {
+      // Pulse dialing mode, first character
+      if (mode == 0) {
+        mode = 2;
+        dialModeTonePulse = false;
+        idx++;
+      }
+      else
+        result = false;
+    }
+    else if (isdigit(buf[idx]) or
+             buf[idx] == '*' or
+             buf[idx] == '#' or
+             buf[idx] == ',') {
+      // Digit or pause character
+      dn[ndx++] = buf[idx++];
+      if (ndx > len)
+        result = false;
+    }
+    else if (buf[idx] == 'R') {
+      // Reverse, last character
+      dialModeReverse = true;
+      break;
+    }
+    else if (buf[idx] == ';') {
+      // Stay in command mode, last character
+      dialModeCommand = true;
+      break;
+    }
+    else
+      // Invalid character
+      result = false;
+  }
+
+  // Make sure it ends with null character
+  dn[ndx] = '\0';
+
+  // Return the result
+  return result;
 }
 
 uint8_t HAYES::doSIO() {
