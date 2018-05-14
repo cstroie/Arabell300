@@ -53,7 +53,7 @@ ISR(ADC_vect) {
 void setup() {
   // Serial port configuration
   // We really should use 300 baud...
-  Serial.begin(1200);
+  Serial.begin(300);
 
   // Define and configure the modem
   afsk.init(BELL103, &cfg);
