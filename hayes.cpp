@@ -317,17 +317,24 @@ void HAYES::dispatch() {
 
     // ATA Answer incomming call
     case 'A':
-      cmdResult = RC_NO_CARRIER;
+      cmdResult = RC_ERROR;
       // Phase 1: Set direction
       _afsk->setDirection(ANSWERING);
       // Phase 2: Go online
-      _afsk->setOnline(ON);
+      _afsk->setLine(ON);
       // Phase 2: Carrier on (after a while)
       _afsk->setCarrier(ON);
       // Phase 3: Check originating carrier for S7 seconds
-      // Phase 4: Data mode if carrier found
-      _afsk->setMode(DATA_MODE);
-      cmdResult = RC_CONNECT;
+      if (_afsk->checkCarrier()) {
+        // Phase 4: Data mode if carrier found
+        _afsk->setMode(DATA_MODE);
+        cmdResult = RC_CONNECT;
+      }
+      else {
+        // No carrier, go offline
+        _afsk->setLine(OFF);
+        cmdResult = RC_NO_CARRIER;
+      }
       break;
 
     // ATB Select Communication Protocol
@@ -367,30 +374,36 @@ void HAYES::dispatch() {
     case 'D':
       // TODO phases
       cmdResult = RC_ERROR;
-      // Phase 1: Set direction
-      _afsk->setDirection(ORIGINATING);
-      // Phase 2: Go online, check dialtone / busy (NO_DIALTONE / BUSY)
-      _afsk->setOnline(ON);
+      // Phase 1: Go online
+      _afsk->setLine(ON);
+      // Phase 2: Check dialtone / busy (NO_DIALTONE / BUSY)
       // Phase 3: Dial: DTMF/Pulses
-      {
-        char dn[21];
-        if (getDialNumber(dn, sizeof(dn) - 1)) {
-          // Dial the number
-          _afsk->dial(dn);
-          // Phase 4: Wait for RX carrier (NO_CARRIER)
-          // Phase 5: Enable TX carrier (if not already)
+      if (getDialNumber(dialNumber, sizeof(dialNumber) - 1)) {
+        // Dial the number
+        _afsk->dial(dialNumber);
+        // Phase 4: Wait for RX carrier (NO_CARRIER)
+        if (_afsk->checkCarrier()) {
+          // Phase 5: Set direction
+          _afsk->setDirection(ORIGINATING, dialReverse);
+          // Phase 6: Enable TX carrier (if not already)
           _afsk->setCarrier(ON);
-          // Phase 6: Enter data mode
-          if (dialModeCommand)
+          // Phase 6: Enter data mode or stay in command mode
+          if (dialCmdMode)
             cmdResult = RC_OK;
           else {
             _afsk->setMode(DATA_MODE);
             cmdResult = RC_CONNECT;
           }
         }
-        else
-          cmdResult = RC_ERROR;
+        else {
+          // No carrier, go offline
+          _afsk->setLine(OFF);
+          cmdResult = RC_NO_CARRIER;
+        }
       }
+      else
+        // Invalid dial number
+        cmdResult = RC_ERROR;
       break;
 
     // ATE Set local command mode echo
@@ -411,7 +424,7 @@ void HAYES::dispatch() {
 
     // ATH Hook control
     case 'H':
-      _afsk->setOnline(getValidDigit(0, 1, 0));
+      _afsk->setLine(getValidDigit(0, 1, 0));
       break;
 
     // ATI Show info
@@ -544,7 +557,7 @@ void HAYES::dispatch() {
       //FIXME wdt_enable(WDTO_2S);
       // Wait for the prescaller time to expire
       // without sending the reset signal
-      //FIXME while (true);
+      //FIXME while (true) {};
       break;
 
     // Standard '&' extension
@@ -658,8 +671,8 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
   uint8_t mode = 0;
 
   // Reset defaults
-  dialModeReverse = false;
-  dialModeCommand = false;
+  dialReverse = false;
+  dialCmdMode = false;
 
   while (buf[idx] != '\0' and result == true) {
     if (buf[idx] == ' ' or
@@ -674,7 +687,7 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
       // Tone dialing mode, first character
       if (mode == 0) {
         mode = 1;
-        dialModeTonePulse = true;
+        dialModePT = true;
         idx++;
       }
       else
@@ -684,7 +697,7 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
       // Pulse dialing mode, first character
       if (mode == 0) {
         mode = 2;
-        dialModeTonePulse = false;
+        dialModePT = false;
         idx++;
       }
       else
@@ -701,12 +714,12 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
     }
     else if (buf[idx] == 'R') {
       // Reverse, last character
-      dialModeReverse = true;
+      dialReverse = true;
       break;
     }
     else if (buf[idx] == ';') {
       // Stay in command mode, last character
-      dialModeCommand = true;
+      dialCmdMode = true;
       break;
     }
     else

@@ -71,10 +71,10 @@ void AFSK::setModemType(AFSK_t afsk) {
   _afsk = afsk;
   // Compute the wave index steps
   this->initSteps();
-  // Start as originating
+  // Go offline, switch to command mode
+  this->setLine(OFF);
+  // Start as originating modem
   this->setDirection(ORIGINATING);
-  // Start in command mode
-  this->setMode(COMMAND_MODE);
   // Compute modem specific parameters
   fulBit = F_SAMPLE / _afsk.baud;
   hlfBit = fulBit >> 1;
@@ -642,8 +642,13 @@ void AFSK::setDirection(uint8_t dir, uint8_t rev) {
     fsqTX = &_afsk.answ;
     fsqRX = &_afsk.orig;
   }
-  // Go offline
-  this->setOnline(OFF);
+  // Clear the FIFOs
+  rxFIFO.clear();
+  txFIFO.clear();
+  // Prepare the delay queue for RX
+  dyFIFO.clear();
+  for (uint8_t i = 0; i < fsqRX->queuelen; i++)
+    dyFIFO.in(bias);
 }
 
 /**
@@ -651,20 +656,13 @@ void AFSK::setDirection(uint8_t dir, uint8_t rev) {
 
   @param online online status
 */
-void AFSK::setOnline(uint8_t online) {
+void AFSK::setLine(uint8_t online) {
   // Keep the online status
   _online = online;
 
   if (online == OFF) {
     // Command mode
     this->setMode(COMMAND_MODE);
-    // Clear the FIFOs
-    rxFIFO.clear();
-    txFIFO.clear();
-    // Prepare the delay queue for RX
-    dyFIFO.clear();
-    for (uint8_t i = 0; i < fsqRX->queuelen; i++)
-      dyFIFO.in(bias);
   }
 }
 
@@ -685,6 +683,15 @@ void AFSK::setMode(uint8_t mode) {
 */
 void AFSK::setCarrier(uint8_t onoff) {
   _carrier = onoff & _cfg->txcarr;
+}
+
+/**
+  Check the incoming carrier
+*/
+bool AFSK::checkCarrier() {
+  // TODO
+  delay(1000);
+  return true;
 }
 
 /**

@@ -101,9 +101,10 @@ class HAYES {
     void    sregPrint(uint8_t r, bool newline = false);
 
 
-    bool    dialModeCommand   = false;
-    bool    dialModeReverse   = false;
-    bool    dialModeTonePulse = true;
+    uint8_t dialCmdMode = 0;
+    uint8_t dialReverse = 0;
+    uint8_t dialModePT  = 0;      // 0 unspecified, 1 tone, 2 pulse
+    char    dialNumber[21];
     bool    getDialNumber(char *dn, size_t len);
 
 

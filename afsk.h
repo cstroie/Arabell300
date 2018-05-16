@@ -208,9 +208,10 @@ class AFSK {
     void initSteps();
     void setModemType(AFSK_t afsk);
     void setDirection(uint8_t dir, uint8_t rev = OFF);
-    void setOnline(uint8_t online);
+    void setLine(uint8_t online);
     void setMode(uint8_t mode);
     void setCarrier(uint8_t onoff);
+    bool checkCarrier();
     void dial(char *buf);
     void doTXRX();
     bool doSIO();
