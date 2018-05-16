@@ -140,6 +140,7 @@ bool Profile::factory(CFG_t *cfg) {
   cfg->quiet  = 0x00; // ATQ
   cfg->verbal = 0x01; // ATV
   cfg->selcpm = 0x00; // ATX
+  cfg->dialpt = 0x01; // ATP/T
   cfg->revans = 0x00; // AT&A
   cfg->dcdopt = 0x01; // AT&C
   cfg->dtropt = 0x01; // AT&D

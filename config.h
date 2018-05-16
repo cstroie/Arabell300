@@ -34,7 +34,7 @@
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Bell103";
-const char VERSION[]  PROGMEM = "v2.26";
+const char VERSION[]  PROGMEM = "v2.27";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DESCRP[]   PROGMEM = "Arduino emulated standard 300 baud modem";
 const char FTRS[]     PROGMEM = "a0000403F88004000\r\nb000008\r\nr1005100000000000";
@@ -55,6 +55,7 @@ struct CFG_t {
       uint8_t quiet : 1;  // ATQ Quiet mode
       uint8_t verbal: 1;  // ATV Verbose mode
       uint8_t selcpm: 1;  // ATX Select call progress method
+      uint8_t dialpt: 1;  // ATP/T Select pulse/tone dialing
       uint8_t revans: 1;  // AT&A Reverse answering frequencies
       uint8_t dcdopt: 1;  // AT&C DCD option selection
       uint8_t dtropt: 2;  // AT&D DTR option selection

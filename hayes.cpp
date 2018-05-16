@@ -263,7 +263,9 @@ void HAYES::showProfile(CFG_t *cfg) {
   cmdPrint('F', cfg->dtecho, false);
   cmdPrint('L', cfg->spklvl, false);
   cmdPrint('M', cfg->spkmod, false);
+  if (not cfg->dialpt) Serial.print(F("P "));
   cmdPrint('Q', cfg->quiet,  false);
+  if (cfg->dialpt) Serial.print(F("T "));
   cmdPrint('V', cfg->verbal, false);
   cmdPrint('X', cfg->selcpm, false);
   printCRLF();
@@ -296,8 +298,13 @@ uint8_t HAYES::doSIO() {
       // Local terminal command mode echo
       if (_cfg->cmecho)
         Serial.write(c);
-      // Append to buffer
-      buf[len++] = c;
+      // Check the character
+      if (c == _cfg->sregs[5] and len > 0)
+        // Backspace
+        len--;
+      else
+        // Append to buffer
+        buf[len++] = c;
       // Check for EOL
       if (c == '\r' or c == '\n') {
         // Flush the rest
@@ -340,6 +347,24 @@ void HAYES::doCommand() {
         break;
     }
   }
+}
+
+/**
+  Print the command result code or message
+  http://www.messagestick.net/modem/Hayes_Ch1-2.html
+
+  @param code the response code
+*/
+void HAYES::printResult(uint8_t code) {
+  if (code != RC_NONE and _cfg->quiet != 1)
+    if (_cfg->verbal) {
+      printCRLF();
+      print_P(rcMsg[code], true);
+    }
+    else {
+      Serial.print(code);
+      printCRLF();
+    }
 }
 
 void HAYES::dispatch() {
@@ -543,6 +568,12 @@ void HAYES::dispatch() {
       _afsk->setMode(getValidDigit(0, 1, 0) + 1);
       break;
 
+    // ATP Pulse dialing
+    case 'P':
+      _cfg->dialpt = OFF;
+      cmdResult = RC_OK;
+      break;
+
     // ATQ Quiet Mode
     case 'Q':
       if (buf[idx] == '?')
@@ -570,6 +601,12 @@ void HAYES::dispatch() {
           _cfg->sregs[_sreg] = getValidInteger(0, 255, _cfg->sregs[_sreg], (uint8_t)3);
         }
       }
+      break;
+
+    // ATT Tone dialing
+    case 'T':
+      _cfg->dialpt = ON;
+      cmdResult = RC_OK;
       break;
 
     // ATV Verbose mode
@@ -706,7 +743,6 @@ void HAYES::dispatch() {
 bool HAYES::getDialNumber(char *dn, size_t len) {
   bool result = true;
   uint8_t ndx = 0;
-  uint8_t mode = 0;
 
   // Reset defaults
   dialReverse = false;
@@ -723,23 +759,13 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
     }
     else if (buf[idx] == 'T' and ndx == 0) {
       // Tone dialing mode, first character
-      if (mode == 0) {
-        mode = 1;
-        dialModePT = true;
-        idx++;
-      }
-      else
-        result = false;
+      _cfg->dialpt = ON;
+      idx++;
     }
     else if (buf[idx] == 'P' and ndx == 0) {
       // Pulse dialing mode, first character
-      if (mode == 0) {
-        mode = 2;
-        dialModePT = false;
-        idx++;
-      }
-      else
-        result = false;
+      _cfg->dialpt = OFF;
+      idx++;
     }
     else if (isdigit(buf[idx]) or
              buf[idx] == '*' or
@@ -770,23 +796,4 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
 
   // Return the result
   return result;
-}
-
-/**
-  Print the command result code or message
-  http://www.messagestick.net/modem/Hayes_Ch1-2.html
-
-  @param code the response code
-*/
-void HAYES::printResult(uint8_t code) {
-  if (code != RC_NONE and _cfg->quiet != 1)
-    if (_cfg->verbal) {
-      printCRLF();
-      print_P(rcMsg[code]);
-      printCRLF();
-    }
-    else {
-      Serial.print(code);
-      printCRLF();
-    }
 }
