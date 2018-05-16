@@ -285,16 +285,24 @@ void AFSK::txHandle() {
   }
   // Check if we are tone dialing
   else if (_dialing) {
-    // Get the DTMF sample
-    if (dtmf.getSample())
-      // Send the sample to DAC
-      DAC(dtmf.sample);
+    static char dialChar = '\0';
+    // Check each dial character
+    if (dialChar == ',') {
+      // Pause for S8 seconds
+      if (_commaCnt++ >= _commaMax) {
+        dialChar = '\0';
+        _commaCnt = 0;
+      }
+    }
     else if (not txFIFO.empty()) {
       // Check the FIFO for dial numbers
-      char c = txFIFO.out();
-      if (c != ',')
-        dtmf.send(c);
+      dialChar = txFIFO.out();
+      if (dialChar != ',')
+        dtmf.send(dialChar);
     }
+    else if (dtmf.getSample())
+      // Get the DTMF sample and send to DAC
+      DAC(dtmf.sample);
     else
       // Stop dialing
       _dialing = OFF;
@@ -702,6 +710,11 @@ bool AFSK::checkCarrier() {
 void AFSK::dial(char *buf) {
   // Disable the carrier
   this->setCarrier(OFF);
+  // Sanitize S8 and set the comma delay value
+  if (_cfg->sregs[8] > 6)
+    _cfg->sregs[8] = 2;
+  _commaMax = F_SAMPLE * _cfg->sregs[8];
+  _commaCnt = 0;
   // Store the dial number in TX FIFO
   txFIFO.clear();
   while (*buf != 0)
