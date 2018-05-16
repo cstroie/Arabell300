@@ -212,7 +212,7 @@ class AFSK {
     void setMode(uint8_t mode);
     void setCarrier(uint8_t onoff);
     bool checkCarrier();
-    void dial(char *buf);
+    bool dial(char *buf);
     void doTXRX();
     bool doSIO();
 

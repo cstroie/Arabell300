@@ -706,8 +706,10 @@ bool AFSK::checkCarrier() {
   Dial a number
 
   @param number the number to dial
+  @return true if completed, false if interrupted
 */
-void AFSK::dial(char *buf) {
+bool AFSK::dial(char *buf) {
+  bool result = true;
   // Disable the carrier
   this->setCarrier(OFF);
   // Sanitize S8 and set the comma delay value
@@ -722,8 +724,16 @@ void AFSK::dial(char *buf) {
   // Start dialing
   _dialing = ON;
   // Block until dialing is over
-  while (_dialing == ON)
+  while (_dialing == ON) {
+    // Stop dialing if there is any char on serial
+    if (Serial.available()) {
+      _dialing = OFF;
+      result = false;
+    }
+    // Busy delay
     delay(10);
+  }
+  return result;
 }
 
 /**
