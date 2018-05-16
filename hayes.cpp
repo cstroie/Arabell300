@@ -300,21 +300,19 @@ uint8_t HAYES::doSIO() {
       buf[len++] = c;
       // Check for EOL
       if (c == '\r' or c == '\n') {
-        // Check the next character
-        c = Serial.peek();
-        // If newline, consume it
-        if (c == '\r' or c == '\n')
-          Serial.read();
+        // Flush the rest
+        Serial.flush();
         // Send the newline
         printCRLF();
         // Make sure the last char is null
         buf[--len] = '\0';
-        // Parse the line
-        doCommand();
-        // Check the line length before reporting
-        if (len > 0)
+        // Check the line length before processing
+        if (len > 0) {
+          // Parse the line
+          doCommand();
           // Print the command response
           printResult(cmdResult);
+        }
         // Reset the buffer length
         len = 0;
       }
@@ -409,7 +407,6 @@ void HAYES::dispatch() {
 
     // ATD Call
     case 'D':
-      // TODO phases
       cmdResult = RC_ERROR;
       // Phase 1: Go online
       _afsk->setLine(ON);
@@ -417,26 +414,30 @@ void HAYES::dispatch() {
       // Phase 3: Dial: DTMF/Pulses
       if (getDialNumber(dialNumber, sizeof(dialNumber) - 1)) {
         // Dial the number
-        _afsk->dial(dialNumber);
-        // Phase 4: Wait for RX carrier (NO_CARRIER)
-        if (_afsk->checkCarrier()) {
-          // Phase 5: Set direction
-          _afsk->setDirection(ORIGINATING, dialReverse);
-          // Phase 6: Enable TX carrier (if not already)
-          _afsk->setCarrier(ON);
-          // Phase 6: Enter data mode or stay in command mode
-          if (dialCmdMode)
-            cmdResult = RC_OK;
+        if (_afsk->dial(dialNumber)) {
+          // Phase 4: Wait for RX carrier (NO_CARRIER)
+          if (_afsk->checkCarrier()) {
+            // Phase 5: Set direction
+            _afsk->setDirection(ORIGINATING, dialReverse);
+            // Phase 6: Enable TX carrier (if not already)
+            _afsk->setCarrier(ON);
+            // Phase 6: Enter data mode or stay in command mode
+            if (dialCmdMode)
+              cmdResult = RC_OK;
+            else {
+              _afsk->setMode(DATA_MODE);
+              cmdResult = RC_CONNECT;
+            }
+          }
           else {
-            _afsk->setMode(DATA_MODE);
-            cmdResult = RC_CONNECT;
+            // No carrier, go offline
+            _afsk->setLine(OFF);
+            cmdResult = RC_NO_CARRIER;
           }
         }
-        else {
-          // No carrier, go offline
-          _afsk->setLine(OFF);
-          cmdResult = RC_NO_CARRIER;
-        }
+        else
+          // Interrupted
+          cmdResult = RC_OK;
       }
       else
         // Invalid dial number
