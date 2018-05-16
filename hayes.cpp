@@ -284,6 +284,44 @@ void HAYES::showProfile(CFG_t *cfg) {
   }
 }
 
+uint8_t HAYES::doSIO() {
+  char c;
+  // Read from serial only if there is room in buffer
+  if (len < MAX_INPUT_SIZE - 1) {
+    c = Serial.read();
+    // Check if we have a valid character
+    if (c >= 0) {
+      // Uppercase
+      c = toupper(c);
+      // Local terminal command mode echo
+      if (_cfg->cmecho)
+        Serial.write(c);
+      // Append to buffer
+      buf[len++] = c;
+      // Check for EOL
+      if (c == '\r' or c == '\n') {
+        // Check the next character
+        c = Serial.peek();
+        // If newline, consume it
+        if (c == '\r' or c == '\n')
+          Serial.read();
+        // Send the newline
+        printCRLF();
+        // Make sure the last char is null
+        buf[--len] = '\0';
+        // Parse the line
+        doCommand();
+        // Check the line length before reporting
+        if (len > 0)
+          // Print the command response
+          printResult(cmdResult);
+        // Reset the buffer length
+        len = 0;
+      }
+    }
+  }
+}
+
 void HAYES::doCommand() {
   // Reset the command result
   cmdResult = RC_ERROR;
@@ -305,7 +343,6 @@ void HAYES::doCommand() {
     }
   }
 }
-
 
 void HAYES::dispatch() {
   // Check the first character, could be a symbol or a letter
@@ -732,45 +769,6 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
 
   // Return the result
   return result;
-}
-
-uint8_t HAYES::doSIO() {
-  char c;
-  // Read from serial only if there is room in buffer
-  if (len < MAX_INPUT_SIZE - 1) {
-    c = Serial.read();
-    // Check if we have a valid character
-    if (c >= 0) {
-      // Uppercase
-      c = toupper(c);
-      // Local terminal command mode echo
-      if (_cfg->cmecho)
-        Serial.write(c);
-      // Append to buffer
-      buf[len++] = c;
-      // Check for EOL
-      if (c == '\r' or c == '\n') {
-        // Check the next character
-        c = Serial.peek();
-        // If newline, consume it
-        if (c == '\r' or c == '\n')
-          Serial.read();
-        // Send the newline
-        printCRLF();
-        // Make sure the last char is null
-        len--;
-        buf[len] = '\0';
-        // Parse the line
-        doCommand();
-        // Check the line length before reporting
-        if (len >= 0)
-          // Print the command response
-          printResult(cmdResult);
-        // Reset the buffer length
-        len = 0;
-      }
-    }
-  }
 }
 
 /**
