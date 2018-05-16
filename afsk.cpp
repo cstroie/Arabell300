@@ -294,15 +294,15 @@ void AFSK::txHandle() {
         _commaCnt = 0;
       }
     }
+    else if (dtmf.getSample())
+      // Get the DTMF sample and send to DAC
+      DAC(dtmf.sample);
     else if (not txFIFO.empty()) {
       // Check the FIFO for dial numbers
       dialChar = txFIFO.out();
       if (dialChar != ',')
         dtmf.send(dialChar);
     }
-    else if (dtmf.getSample())
-      // Get the DTMF sample and send to DAC
-      DAC(dtmf.sample);
     else
       // Stop dialing
       _dialing = OFF;
@@ -719,8 +719,11 @@ bool AFSK::dial(char *buf) {
   _commaCnt = 0;
   // Store the dial number in TX FIFO
   txFIFO.clear();
+  // Prepend and append comma-delays
+  txFIFO.in(',');
   while (*buf != 0)
     txFIFO.in(*buf++);
+  txFIFO.in(',');
   // Start dialing
   _dialing = ON;
   // Block until dialing is over

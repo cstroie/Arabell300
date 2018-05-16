@@ -768,6 +768,7 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
       idx++;
     }
     else if (isdigit(buf[idx]) or
+             (buf[idx] >= 'A' and buf[idx] <= 'D') or
              buf[idx] == '*' or
              buf[idx] == '#' or
              buf[idx] == ',') {
