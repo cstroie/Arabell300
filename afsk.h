@@ -245,6 +245,10 @@ class AFSK {
     AFSK_FSQ_t *fsqTX;
     AFSK_FSQ_t *fsqRX;
 
+    uint8_t dlySmpl;
+    uint8_t dlySmplI;
+    uint8_t dlySmplQ;
+
     inline void DAC(uint8_t sample);
     void initHW();
     void txHandle();

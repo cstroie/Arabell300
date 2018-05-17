@@ -22,6 +22,7 @@
 */
 
 #include "afsk.h"
+#include "dsp.h"
 
 // The wave generator
 WAVE wave;
@@ -335,17 +336,48 @@ void AFSK::rxHandle(uint8_t sample) {
   }
 #endif
 
+  // Get the linear interpolated PI/2 delayed sample
+  uint8_t n1 = dyFIFO.out();
+  uint8_t n2 = dyFIFO.peek();
+  uint8_t dlyValue = ((int16_t)n2 * (0x10 - dlySmplQ) + (int16_t)n1 * dlySmplQ) >> 4;
+  //uint8_t dlyValue = lerp(n2, n1, dlySmplQ); // - bias;
+
+  //Serial.print(sample);
+  //Serial.print(" ");
+  //Serial.print(n1);
+  //Serial.print(" ");
+  //Serial.print(n2);
+  //Serial.print(" ");
+  //Serial.print(dlyValue);
+
+
+  int16_t x = (int16_t)(dlyValue - bias) * ss;
+  Serial.print(x);
+  //static int32_t y = 0;
+  //y = ((y << 3) - y + x + 4) >> 3;
+  Serial.print(" ");
+  Serial.print(lp600((int8_t)x));
+
+
+
+
   // First order low-pass Chebyshev filter
   //  300:   0.16272643677832518 0.6745471264433496
   //  600:   0.28187392036298453 0.4362521592740309
   //  1200:  0.4470595850866754  0.10588082982664918
 
   rx.iirX[0] = rx.iirX[1];
-  rx.iirX[1] = ((dyFIFO.out() - 128) * ss) >> 2;
-  //rx.iirX[1] = ((dyFIFO.out() - 128) * ss) >> 3;
+  rx.iirX[1] = ((int8_t)(dlyValue - bias) * ss) >> 2;
+  //rx.iirX[1] = ((int8_t)(dlyValue - bias) * ss) >> 3;
   rx.iirY[0] = rx.iirY[1];
   rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
   //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + ((rx.iirY[0] >> 4) * 15); // *0.9
+
+  Serial.print(" ");
+  Serial.print(rx.iirY[1]);
+
+
+  Serial.println();
 
   // Keep the unsigned sample in delay FIFO
   dyFIFO.in(sample);
@@ -650,12 +682,25 @@ void AFSK::setDirection(uint8_t dir, uint8_t rev) {
     fsqTX = &_afsk.answ;
     fsqRX = &_afsk.orig;
   }
+  // Compute the delay samples Q4
+  //dlySmpl  = 16 * (F_SAMPLE / 4) / (fsqRX->freq[0] + fsqRX->freq[1]) / 2;
+  uint16_t medfrq = (fsqRX->freq[0] + fsqRX->freq[1]) / 2;
+  dlySmpl  = 16 * (F_SAMPLE / 4) / medfrq;
+
+  dlySmpl = 160;
+
+  //dlySmpl  = 4 * (uint16_t)F_SAMPLE / fsqRX->freq[1];
+  Serial.println(medfrq);
+  Serial.println(dlySmpl);
+  dlySmplI = dlySmpl >> 4;
+  dlySmplQ = dlySmpl & 0x0F;
+
   // Clear the FIFOs
   rxFIFO.clear();
   txFIFO.clear();
   // Prepare the delay queue for RX
   dyFIFO.clear();
-  for (uint8_t i = 0; i < fsqRX->queuelen; i++)
+  for (uint8_t i = 0; i < (dlySmplI + 1); i++)
     dyFIFO.in(bias);
 }
 
@@ -734,7 +779,7 @@ bool AFSK::dial(char *buf) {
       result = false;
     }
     // Busy delay
-    delay(10);
+    delay(1);
   }
   return result;
 }
@@ -745,7 +790,9 @@ bool AFSK::dial(char *buf) {
 void AFSK::simFeed() {
   // Simulation
   static uint8_t idx = 0;
-  uint8_t bt = (millis() / 1000) % 2;
+  uint8_t bt = (millis() / 10000) % 2;
+
+  //bt = 1;
 
   int8_t x = wave.sample(idx);
 
@@ -771,6 +818,8 @@ void AFSK::simFeed() {
 
   rxHandle(x);
   idx += fsqRX->step[bt];
+
+  delay(100);
 }
 
 /**

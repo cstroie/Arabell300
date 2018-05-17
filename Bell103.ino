@@ -19,7 +19,7 @@
   Bell 103: 300 8N1
 */
 
-//#define DEBUG
+#define DEBUG
 
 #include <util/atomic.h>
 
@@ -53,10 +53,15 @@ ISR(ADC_vect) {
 void setup() {
   // Serial port configuration
   // We really should use 300 baud...
+#ifdef DEBUG
+  Serial.begin(9600);
+#else
   Serial.begin(300);
+#endif
 
   // Define and configure the modem
   afsk.init(BELL103, &cfg);
+  afsk.setDirection(ANSWERING);
 }
 
 /**
@@ -77,6 +82,6 @@ void loop() {
 
 #ifdef DEBUG
   afsk.simFeed();
-  afsk.simPrint();
+  //afsk.simPrint();
 #endif
 }
