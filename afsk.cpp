@@ -352,11 +352,14 @@ void AFSK::rxHandle(uint8_t sample) {
 
 
   int16_t x = (int16_t)(dlyValue - bias) * ss;
-  Serial.print(x);
+
+  //Serial.print(x);
+  //Serial.print(" ");
+
   //static int32_t y = 0;
   //y = ((y << 3) - y + x + 4) >> 3;
-  Serial.print(" ");
-  Serial.print(lp600((int8_t)x));
+  //Serial.print(lp600((int8_t)x));
+  //Serial.print(" ");
 
 
 
@@ -367,16 +370,17 @@ void AFSK::rxHandle(uint8_t sample) {
   //  1200:  0.4470595850866754  0.10588082982664918
 
   rx.iirX[0] = rx.iirX[1];
-  rx.iirX[1] = ((int8_t)(dlyValue - bias) * ss) >> 2;
+  //rx.iirX[1] = x >> 2;
+  //rx.iirX[1] = x * 0.3;
+  rx.iirX[1] = (5 * (int32_t)x) >> 4;
   //rx.iirX[1] = ((int8_t)(dlyValue - bias) * ss) >> 3;
   rx.iirY[0] = rx.iirY[1];
-  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
+  //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
+  //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] * 0.8);
+  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + ((13 * (int32_t)rx.iirY[0]) >> 4);
   //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + ((rx.iirY[0] >> 4) * 15); // *0.9
 
-  Serial.print(" ");
   Serial.print(rx.iirY[1]);
-
-
   Serial.println();
 
   // Keep the unsigned sample in delay FIFO
@@ -687,11 +691,15 @@ void AFSK::setDirection(uint8_t dir, uint8_t rev) {
   uint16_t medfrq = (fsqRX->freq[0] + fsqRX->freq[1]) / 2;
   dlySmpl  = 16 * (F_SAMPLE / 4) / medfrq;
 
-  dlySmpl = 160;
+  //dlySmpl = 162;
+  // Bell 103
+  dlySmpl = 98; // ANSW 6.125 * 16
+  //dlySmpl = 90; // ORIG 5.625 * 16
+
+  // Bell202
+  //dlySmpl = 70;
 
   //dlySmpl  = 4 * (uint16_t)F_SAMPLE / fsqRX->freq[1];
-  Serial.println(medfrq);
-  Serial.println(dlySmpl);
   dlySmplI = dlySmpl >> 4;
   dlySmplQ = dlySmpl & 0x0F;
 
@@ -790,9 +798,16 @@ bool AFSK::dial(char *buf) {
 void AFSK::simFeed() {
   // Simulation
   static uint8_t idx = 0;
-  uint8_t bt = (millis() / 10000) % 2;
+  static uint8_t flip = 0;
+  //uint8_t bt = (millis() / 2000) % 2;
+  //uint8_t bt = (flip & 0x08) != 0;
+  uint8_t bt = (flip & 0x40) != 0;
+
 
   //bt = 1;
+
+
+
 
   int8_t x = wave.sample(idx);
 
@@ -817,7 +832,15 @@ void AFSK::simFeed() {
   //Serial.println(idx);
 
   rxHandle(x);
+  /*
+    Serial.print(bt << 2);
+    Serial.print(",");
+    Serial.print(-((rx.iirY[1] > 0) << 2));
+    Serial.println();
+  */
   idx += fsqRX->step[bt];
+  flip++;
+
 
   delay(100);
 }
