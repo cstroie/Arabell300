@@ -1,5 +1,5 @@
 /**
-  Bell103 - An Arduino-based Bell 103-compatible modem (300 baud)
+  Arabell300 - Arduino Bell 103 and ITU V.21 modem
 
   Copyright (C) 2018 Costin STROIE <costinstroie@eridu.eu.org>
 
@@ -15,8 +15,6 @@
 
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-  Bell 103: 300 8N1
 */
 
 //#define DEBUG

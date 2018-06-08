@@ -33,10 +33,10 @@
 
 
 // Software name and vesion
-const char DEVNAME[]  PROGMEM = "Bell103";
+const char DEVNAME[]  PROGMEM = "Arabell300";
 const char VERSION[]  PROGMEM = "v2.28";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
-const char DESCRP[]   PROGMEM = "Arduino emulated standard 300 baud modem";
+const char DESCRP[]   PROGMEM = "Arduino based Bell 103 and ITU V.21 modem";
 const char FTRS[]     PROGMEM = "a0000403F88004000\r\nb000008\r\nr1005100000000000";
 const char DATE[]     PROGMEM = __DATE__;
 
