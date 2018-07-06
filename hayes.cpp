@@ -410,8 +410,10 @@ void HAYES::dispatch() {
             case 15:  _afsk->setModemType(V_21);    break;
             case 16:  _afsk->setModemType(BELL103); break;
             case 23:  _afsk->setModemType(V_23_M1); break;
+            // Dummy value for RTTY
+            case 31:  _afsk->setModemType(RTTY); break;
+            // Default to Bell 103
             default:
-              // Default to Bell 103
               _cfg->compro = 16;
               _afsk->setModemType(BELL103);
               cmdResult = RC_ERROR;

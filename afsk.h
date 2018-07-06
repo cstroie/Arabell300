@@ -175,6 +175,7 @@ static AFSK_t V_23_M2 = {
 };
 
 // RTTY configuration
+// Live: http://internet-tty.net:8000/ITTY"
 static AFSK_t RTTY = {
   {
     {2295, 2125},
@@ -186,8 +187,8 @@ static AFSK_t RTTY = {
     {0, 0},
     12, 1,
   },
-  50,
-  8,
+  45, // 45.45 baud
+  5,  // 5 bits baudot code, 1.5 stop bits
   0
 };
 

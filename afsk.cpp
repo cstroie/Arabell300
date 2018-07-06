@@ -434,6 +434,7 @@ void AFSK::rxDecoder(uint8_t bt) {
             else {
               // This is a start bit, go on to data bits
               rx.state  = DATA_BIT;
+              rx.data   = 0;
               rx.clk    = 0;
               rx.bitsum = 0;
               rx.bits   = 0;
