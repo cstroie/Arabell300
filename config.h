@@ -21,7 +21,7 @@
 #define CONFIG_H
 
 // CPU frequency correction for sampling timer
-#define F_COR (-120000L)
+#define F_COR (-220000L)
 
 // Sampling frequency
 #define F_SAMPLE    9600
@@ -34,7 +34,7 @@
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Arabell300";
-const char VERSION[]  PROGMEM = "v2.29";
+const char VERSION[]  PROGMEM = "v2.31";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DESCRP[]   PROGMEM = "Arduino based Bell 103 and ITU V.21 modem";
 const char FTRS[]     PROGMEM = "a0000403F88004000\r\nb000008\r\nr1005100000000000";
@@ -72,11 +72,23 @@ struct CFG_t {
 };
 
 // The S registers
-const uint8_t sRegs[16] PROGMEM = {0, 0, '+', '\r', '\n', '\b',
-                                   2, 30, 2, 6, 7, 100, 50,
-                                   0, 0, 0
+const uint8_t sRegs[16] PROGMEM = {0,     // Rings to Auto-Answer
+                                   0,     // Ring Counter
+                                   '+',   // Escape Character
+                                   '\r',  // Carriage Return Character
+                                   '\n',  // Line Feed Character
+                                   '\b',  // Backspace Character
+                                   2,     // Wait Time for Dial Tone
+                                   50,    // Wait Time for Carrier
+                                   2,     // Pause Time for Dial Delay Modifier
+                                   6,     // Carrier Detect Response Time (tenths of a second)
+                                   14,    // Carrier Loss Disconnect Time (tenths of a second)
+                                   95,    // DTMF Tone Duration
+                                   50,    // Escape Prompt Delay
+                                   0,     // Reserved
+                                   0,     // General Bit Mapped Options Status
+                                   0      // Reserved
                                   };
-
 
 
 class Profile {

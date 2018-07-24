@@ -39,7 +39,7 @@
 // Mark and space bits
 enum BIT {SPACE, MARK};
 // States in RX and TX finite states machines
-enum TXRX_STATE {WAIT, PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL};
+enum TXRX_STATE {WAIT, PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, CARRIER};
 // Connection direction
 enum DIRECTION {ORIGINATING, ANSWERING};
 // Command and data mode
@@ -56,6 +56,7 @@ struct TX_t {
   uint8_t bits    = 0;        // counter of already transmitted bits
   uint8_t idx     = 0;        // wave samples index (start with first sample)
   uint8_t clk     = 0;        // samples counter for each bit
+  uint8_t carrier = OFF;      // outgoing carrier enabled or not
 };
 
 // Receiving and decoding related data
@@ -67,6 +68,7 @@ struct RX_t {
   uint8_t stream  = 0;        // last 8 decoded bit samples
   uint8_t bitsum  = 0;        // sum of the last decoded bit samples
   uint8_t clk     = 0;        // samples counter for each bit
+  uint8_t carrier = OFF;      // incoming carrier detected or not
   int16_t iirX[2] = {0, 0};   // IIR Filter X cells
   int16_t iirY[2] = {0, 0};   // IIR Filter Y cells
 };
@@ -227,7 +229,6 @@ class AFSK {
     uint8_t _online   = OFF;     // OnHook / OffHook
     uint8_t _mode     = COMMAND_MODE;   // Modem works in data mode or in command mode
     uint8_t _dir      = ORIGINATING;
-    uint8_t _carrier  = OFF;
     uint8_t _dialing  = OFF;
 
     uint16_t _commaCnt;
@@ -235,6 +236,10 @@ class AFSK {
     uint16_t _guard;
 
     uint8_t fulBit, hlfBit, qrtBit, octBit;
+
+    // Carrier detect counter and threshold
+    uint32_t cdCount; // samples counter
+    uint32_t cdTotal; // total samples to count
 
     // Serial flow control tracking status
     bool flowControl = false;

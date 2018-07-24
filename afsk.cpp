@@ -80,6 +80,9 @@ void AFSK::setModemType(AFSK_t afsk) {
   hlfBit = fulBit >> 1;
   qrtBit = hlfBit >> 1;
   octBit = qrtBit >> 1;
+  // Compute CarrierDetect threshold
+  cdTotal = F_SAMPLE / 10 * _cfg->sregs[9];
+  cdTotal = cdTotal - (cdTotal >> 4);
 }
 
 /**
@@ -174,7 +177,7 @@ inline void AFSK::DAC(uint8_t sample) {
 */
 void AFSK::txHandle() {
   // Check if we are transmitting
-  if (tx.active == ON or _carrier == ON) {
+  if (tx.active == ON or tx.carrier == ON) {
     // First thing first: get the sample
     uint8_t sample = wave.sample(tx.idx);
     // Output the sample
@@ -208,7 +211,7 @@ void AFSK::txHandle() {
         // We are sending the preamble carrier
         case PREAMBLE:
           // Check if we have sent the carrier long enough
-          if (++tx.bits >= carBits or _carrier == ON) {
+          if (++tx.bits >= carBits or tx.carrier == ON) {
             // Carrier sent, go to the start bit (SPACE)
             tx.state  = START_BIT;
             tx.dtbit  = SPACE;
@@ -265,7 +268,7 @@ void AFSK::txHandle() {
             // TX led off
             PORTB    &= ~_BV(PORTB1);
           }
-          else if (tx.bits == carBits and _carrier == OFF) {
+          else if (tx.bits == carBits and tx.carrier == OFF) {
             // After the last trail carrier bit, send nothing
             tx.dtbit  = MARK;
             // Prepare for the future TX
@@ -377,6 +380,23 @@ void AFSK::rxDecoder(uint8_t bt) {
 
   // Check the RX decoder state
   switch (rx.state) {
+    // Detect the incoming carrier
+    case CARRIER:
+      // Check if the sample is valid
+      if (bt != 0) {
+        // Count the received samples
+        if (++cdCount >= cdTotal) {
+          // Reached the maximum, carrier is valid
+          rx.carrier = ON;
+          // Wait for the first start bit
+          rx.state = WAIT;
+        }
+      }
+      else
+        // Reset the counter
+        cdCount = 0;
+      break;
+
     // Check each sample for a HIGH->LOW transition
     case WAIT:
       // Check the transition
@@ -691,16 +711,37 @@ void AFSK::setMode(uint8_t mode) {
   @param onoff carrier mode
 */
 void AFSK::setCarrier(uint8_t onoff) {
-  _carrier = onoff & _cfg->txcarr;
+  tx.carrier = onoff & _cfg->txcarr;
 }
 
 /**
   Check the incoming carrier
 */
 bool AFSK::checkCarrier() {
-  // TODO
-  delay(1000);
-  return true;
+  // Use the decoder to check for carrier
+  cdCount = 0;
+  rx.carrier = OFF;
+  // TODO CD led off
+  rx.state = CARRIER;
+
+  // Check the carrier for at most S7 seconds
+  uint32_t timeout = millis() + _cfg->sregs[7] * 1000;
+  while (millis() < timeout) {
+    // Try to break on '+'
+    // FIXME Use the doSIO routine, in command mode
+    char c = Serial.read();
+    if (c == _cfg->sregs[2]) {
+      Serial.flush();
+      break;
+    }
+    // Check the carrier
+    if (rx.carrier == ON) {
+      // TODO CD led on
+      break;
+    }
+  }
+  // Return the carrier status
+  return rx.carrier;
 }
 
 /**

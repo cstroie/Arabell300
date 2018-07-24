@@ -442,13 +442,13 @@ void HAYES::dispatch() {
       if (getDialNumber(dialNumber, sizeof(dialNumber) - 1)) {
         // Dial the number
         if (_afsk->dial(dialNumber)) {
-          // Phase 4: Wait for RX carrier (NO_CARRIER)
+          // Phase 4: Set direction
+          _afsk->setDirection(ORIGINATING, dialReverse);
+          // Phase 5: Wait for RX carrier (NO_CARRIER)
           if (_afsk->checkCarrier()) {
-            // Phase 5: Set direction
-            _afsk->setDirection(ORIGINATING, dialReverse);
             // Phase 6: Enable TX carrier (if not already)
             _afsk->setCarrier(ON);
-            // Phase 6: Enter data mode or stay in command mode
+            // Phase 7: Enter data mode or stay in command mode
             if (dialCmdMode)
               cmdResult = RC_OK;
             else {
@@ -464,7 +464,7 @@ void HAYES::dispatch() {
         }
         else
           // Interrupted
-          cmdResult = RC_OK;
+          cmdResult = RC_ERROR;
       }
       else
         // Invalid dial number
