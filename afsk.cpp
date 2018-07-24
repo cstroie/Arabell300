@@ -288,6 +288,7 @@ void AFSK::txHandle() {
   }
   // Check if we are tone dialing
   else if (_dialing) {
+    // One time static
     static char dialChar = '\0';
     // Check each dial character
     if (dialChar == ',') {
@@ -759,7 +760,7 @@ bool AFSK::dial(char *buf) {
     _cfg->sregs[8] = 2;
   _commaMax = F_SAMPLE * _cfg->sregs[8];
   _commaCnt = 0;
-  // Store the dial number in TX FIFO
+  // Clear TX FIFO for storing the dial number into
   txFIFO.clear();
   // Prepend and append comma-delays
   txFIFO.in(',');

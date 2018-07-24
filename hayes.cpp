@@ -382,9 +382,9 @@ void HAYES::dispatch() {
       _afsk->setDirection(ANSWERING);
       // Phase 2: Go online
       _afsk->setLine(ON);
-      // Phase 2: Carrier on (after a while)
+      // Phase 2: Answering carrier on (after a while)
       _afsk->setCarrier(ON);
-      // Phase 3: Check originating carrier for S7 seconds
+      // Phase 3: Wait for originating carrier for S7 seconds
       if (_afsk->checkCarrier()) {
         // Phase 4: Data mode if carrier found
         _afsk->setMode(DATA_MODE);
@@ -435,20 +435,20 @@ void HAYES::dispatch() {
     // ATD Call
     case 'D':
       cmdResult = RC_ERROR;
-      // Phase 1: Go online
-      _afsk->setLine(ON);
-      // Phase 2: Check dialtone / busy (NO_DIALTONE / BUSY)
-      // Phase 3: Dial: DTMF/Pulses
+      // Phase 1: Get the dial number and parameters
       if (getDialNumber(dialNumber, sizeof(dialNumber) - 1)) {
-        // Dial the number
+        // Phase 2: Set direction
+        _afsk->setDirection(ORIGINATING, dialReverse);
+        // Phase 3: Go online
+        _afsk->setLine(ON);
+        // Phase 4: Wait for dialtone / busy (NO_DIALTONE / BUSY)
+        // Phase 5: Dial: DTMF/Pulses
         if (_afsk->dial(dialNumber)) {
-          // Phase 4: Set direction
-          _afsk->setDirection(ORIGINATING, dialReverse);
-          // Phase 5: Wait for RX carrier (NO_CARRIER)
+          // Phase 6: Wait for incoming carrier for S7 seconds
           if (_afsk->checkCarrier()) {
-            // Phase 6: Enable TX carrier (if not already)
+            // Phase 7: Enable outgoing carrier
             _afsk->setCarrier(ON);
-            // Phase 7: Enter data mode or stay in command mode
+            // Phase 8: Enter data mode or stay in command mode
             if (dialCmdMode)
               cmdResult = RC_OK;
             else {
@@ -750,7 +750,12 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
   dialReverse = false;
   dialCmdMode = false;
 
-  while (buf[idx] != '\0' and result == true) {
+  // Process until the end of line
+  while (buf[idx] != '\0' and
+         buf[idx] != '\r' and
+         buf[idx] != '\n' and
+         result == true) {
+
     if (buf[idx] == ' ' or
         buf[idx] == '-' or
         buf[idx] == '.' or
