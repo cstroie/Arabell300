@@ -34,8 +34,8 @@
 const char DEVNAME[]  PROGMEM = "Arabell300";
 const char VERSION[]  PROGMEM = "v2.33";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
-const char DESCRP[]   PROGMEM = "Arduino based Bell 103 and ITU V.21 modem";
-const char FTRS[]     PROGMEM = "a0000403F88004000\r\nb000008\r\nr1005100000000000";
+const char DESCRP[]   PROGMEM = "Arduino based Bell 103 and ITU V.21 AFSK modem";
+const char FTRS[]     PROGMEM = "a0000400080004000\r\nb000008\r\nr1001000000000000";
 const char DATE[]     PROGMEM = __DATE__;
 
 
@@ -53,7 +53,7 @@ struct CFG_t {
       uint8_t dtecho: 1;  // ATF Local data mode echo
       uint8_t spklvl: 2;  // ATL Speaker volume level
       uint8_t spkmod: 2;  // ATM Speaker mode
-      uint8_t quiet : 1;  // ATQ Quiet mode
+      uint8_t quiet : 2;  // ATQ Quiet mode
       uint8_t verbal: 1;  // ATV Verbose mode
       uint8_t selcpm: 1;  // ATX Select call progress method
       uint8_t dialpt: 1;  // ATP/T Select pulse/tone dialing

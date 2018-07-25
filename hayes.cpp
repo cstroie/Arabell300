@@ -465,6 +465,8 @@ void HAYES::dispatch() {
         _afsk->setLine(OFF);
         cmdResult = RC_NO_CARRIER;
       }
+      // Disable result codes if ATQ2
+      if (_cfg->quiet == 2) cmdResult = RC_NONE;
       break;
 
     // ATB Select Communication Protocol
@@ -650,7 +652,7 @@ void HAYES::dispatch() {
       if (buf[idx] == '?')
         cmdPrint(_cfg->quiet);
       else
-        _cfg->quiet = getValidDigit(0, 1, _cfg->quiet);
+        _cfg->quiet = getValidDigit(0, 2, _cfg->quiet);
       break;
 
     // ATS Addresses An S-register
