@@ -153,8 +153,8 @@ void AFSK::initHW() {
     delay(1);
   }
 
-  // Configure the leds: RX PB0, TX PB1
-  DDRB |= _BV(PORTB1) | _BV(PORTB0);
+  // Configure the leds: RX PB0(8), TX PB1(9), CD PB2(10)
+  DDRB |= _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0);
 }
 
 /**
@@ -721,7 +721,8 @@ void AFSK::setCarrier(uint8_t onoff) {
   @return the carrier detection status
 */
 bool AFSK::checkCarrier() {
-  // TODO CD led off
+  // CD led off
+  PORTB &= ~_BV(PORTB2);
   // If the value specified in S7 is zero, don't wait
   // for the carrier, report as found
   if (_cfg->sregs[7] == 0)
@@ -733,13 +734,14 @@ bool AFSK::checkCarrier() {
     cdCount = 0;
     // Check the carrier for at most S7 seconds
     uint32_t timeout = millis() + _cfg->sregs[7] * 1000;
-    while (millis() < timeout) {
+    while (millis() < timeout)
       // Stop answering if there is any char on serial
       if (Serial.available() or rx.carrier == ON)
         break;
-    }
   }
-  // TODO CD led on or off
+  // CD led on if carrier
+  if (rx.carrier == ON)
+  PORTB |= _BV(PORTB2);
   // Return the carrier status
   return rx.carrier;
 }
