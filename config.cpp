@@ -34,15 +34,13 @@ Profile::~Profile() {
 */
 uint8_t Profile::CRC8(uint8_t inCrc, uint8_t inData) {
   uint8_t outCrc = inCrc ^ inData;
-  for (uint8_t i = 0; i < 8; ++i) {
+  for (uint8_t i = 0; i < 8; ++i)
     if ((outCrc & 0x80 ) != 0) {
       outCrc <<= 1;
       outCrc ^= 0x07;
     }
-    else {
+    else
       outCrc <<= 1;
-    }
-  }
   return outCrc;
 }
 
@@ -82,12 +80,16 @@ bool Profile::equal(CFG_t *cfg1, CFG_t *cfg2) {
 
 /**
   Write the configuration to EEPROM, along with CRC8, if different
+
+  @param cfg the configuration structure
+  @param slot the stored profile
+  @return always true
 */
-bool Profile::write(CFG_t *cfg) {
+bool Profile::write(CFG_t *cfg, uint8_t slot) {
   // Temporary configuration structure
   struct CFG_t cfgTemp;
   // Read the data from EEPROM into the temporary structure
-  EEPROM.get(eeAddress, cfgTemp.data);
+  EEPROM.get(eeAddress + slot * cfgLen, cfgTemp.data);
   // Compute the CRC8 checksum of the read data
   uint8_t crc8 = this->crc(&cfgTemp);
   // Compute the CRC8 checksum of the actual data, make sure S1 is zero
@@ -99,7 +101,7 @@ bool Profile::write(CFG_t *cfg) {
     for (uint8_t i = 0; i < cfgLen; i++)
       cfgTemp.data[i] = cfg->data[i];
     // Write the data
-    EEPROM.put(eeAddress, cfgTemp.data);
+    EEPROM.put(eeAddress + slot * cfgLen, cfgTemp.data);
   }
   // Always return true, even if data is not written
   return true;
@@ -107,20 +109,24 @@ bool Profile::write(CFG_t *cfg) {
 
 /**
   Read the configuration from EEPROM, along with CRC8, and verify
+
+  @param cfg the configuration structure
+  @param slot the stored profile
+  @param useDefaults use the factory defauls in case of error
+  @return CRC verification
 */
-bool Profile::read(CFG_t *cfg, bool useDefaults = false) {
+bool Profile::read(CFG_t *cfg, uint8_t slot, bool useDefaults) {
   // Temporary configuration structure
   struct CFG_t cfgTemp;
   // Read the data from EEPROM into the temporary structure
-  EEPROM.get(eeAddress, cfgTemp);
+  EEPROM.get(eeAddress + slot * cfgLen, cfgTemp);
   // Compute the CRC8 checksum of the read data
   uint8_t crc8 = this->crc(&cfgTemp);
   // And compare with the read crc8 checksum, also check S1
-  if (cfgTemp.crc8 == crc8 and cfgTemp.sregs[1] == 0) {
+  if (cfgTemp.crc8 == crc8 and cfgTemp.sregs[1] == 0)
     // Copy the temporary structure to configuration and the crc8
     for (uint8_t i = 0; i < cfgLen; i++)
       cfg->data[i] = cfgTemp.data[i];
-  }
   else if (useDefaults)
     factory(cfg);
   return (cfgTemp.crc8 == crc8);
@@ -128,6 +134,9 @@ bool Profile::read(CFG_t *cfg, bool useDefaults = false) {
 
 /**
   Reset the configuration to factory defaults
+
+  @param cfg the configuration structure
+  @return always true
 */
 bool Profile::factory(CFG_t *cfg) {
   // Set the configuration
@@ -158,23 +167,34 @@ bool Profile::factory(CFG_t *cfg) {
 };
 
 /**
-   Get the specfied S register value
+  Get the specfied S register value
+
+  @param cfg the configuration structure
+  @param reg the specified S register
+  @return the register value
 */
 uint8_t Profile::getS(CFG_t *cfg, uint8_t reg) {
   return cfg->sregs[reg];
 }
 
 /**
-   Get the specfied S register value
+  Set the value to specfied S register
+
+  @param cfg the configuration structure
+  @param reg the specified S register
+  @param value the value to set
 */
 void  Profile::setS(CFG_t *cfg, uint8_t reg, uint8_t value) {
   cfg->sregs[reg] = value;
 }
 
 /**
-  Try to load the stored profile or use the factory defaults
+  Try to load the specified stored profile or use the factory defaults
+
+  @param cfg the configuration structure
+  @param slot the stored profile
 */
-void Profile::init(CFG_t *cfg) {
-  this->read(cfg, true);
+void Profile::init(CFG_t *cfg, uint8_t slot) {
+  this->read(cfg, slot, true);
 }
 

@@ -98,7 +98,7 @@ class HAYES {
     void    cmdPrint(char cmd, uint8_t value, bool newline = true);
     void    cmdPrint(char cmd, char mod, uint8_t value, bool newline = true);
     void    cmdPrint(uint8_t value);
-    void    sregPrint(uint8_t r, bool newline = false);
+    void    sregPrint(CFG_t *cfg, uint8_t reg, bool newline = false);
 
 
     uint8_t dialCmdMode = 0;

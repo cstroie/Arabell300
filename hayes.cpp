@@ -41,7 +41,7 @@ void HAYES::printCRLF() {
   Print a character array from program memory
 
   @param str the character array to print
-  @param eol print the EOL
+  @param newline print the EOL
 */
 void HAYES::print_P(const char *str, bool newline) {
   uint8_t val;
@@ -58,13 +58,14 @@ void HAYES::print_P(const char *str, bool newline) {
   @param buf the char buffer to parse
   @param idx index to start with
   @param len maximum to parse, 0 for no limit
-  @return the integer found or zero
+  @return the integer found or zero, also set the cmdResult
 */
 int16_t HAYES::getInteger(char* buf, int8_t idx, uint8_t len = 32) {
   int16_t result  = 0;      // The result
   bool    isNeg   = false;  // Negative flag
   uint8_t sdx     = 0;      // Start index
 
+  // Be positive
   cmdResult = RC_OK;
 
   // If the specified index is negative, use the last local index;
@@ -106,6 +107,7 @@ int16_t HAYES::getInteger(char* buf, int8_t idx, uint8_t len = 32) {
     if (ldx - sdx > len) {
       // Break because length exceeded
       cmdResult = RC_ERROR;
+      result = 0;
     }
     // Check if negative
     if (isNeg)
@@ -116,10 +118,9 @@ int16_t HAYES::getInteger(char* buf, int8_t idx, uint8_t len = 32) {
 }
 
 /**
-  Parse the buffer and return the integer value if it fits in the specified interval
-  or the default value if not.
+  Parse the default buffer and return the integer value if it fits
+  in the specified interval or the default value if not.
 
-  @param buf the char buffer to parse
   @param idx index to start with
   @param low minimal valid value
   @param hgh maximal valid value
@@ -131,6 +132,18 @@ int16_t HAYES::getValidInteger(int16_t low, int16_t hgh, int16_t def, uint8_t le
   return getValidInteger(buf, idx, low, hgh, def, len);
 }
 
+/**
+  Parse the buffer and return the integer value if it fits
+  in the specified interval or the default value if not.
+
+  @param buf the char buffer to parse
+  @param idx index to start with
+  @param low minimal valid value
+  @param hgh maximal valid value
+  @param def default value
+  @param len maximum to parse, 0 for no limit
+  @return the integer value or default
+*/
 int16_t HAYES::getValidInteger(char* buf, uint8_t idx, int16_t low, int16_t hgh, int16_t def, uint8_t len) {
   cmdResult = RC_OK;
   // Get the integer value
@@ -145,16 +158,23 @@ int16_t HAYES::getValidInteger(char* buf, uint8_t idx, int16_t low, int16_t hgh,
 }
 
 /**
-  Parse the buffer and return one digit integer
+  Parse the default buffer and return one digit integer
 
-  @param buf the char buffer to parse
-  @param idx index to start with
+  @param def default value
   @return the integer found or HAYES_NUM_ERROR
 */
 int8_t HAYES::getDigit(int8_t def) {
   return getDigit(buf, idx, def);
 }
 
+/**
+  Parse the buffer and return one digit integer
+
+  @param buf the char buffer to parse
+  @param idx index to start with
+  @param def default value
+  @return the integer found or HAYES_NUM_ERROR
+*/
 int8_t HAYES::getDigit(char* buf, uint8_t idx, int8_t def) {
   // The result is signed integer
   int8_t value = def;
@@ -175,8 +195,8 @@ int8_t HAYES::getDigit(char* buf, uint8_t idx, int8_t def) {
 }
 
 /**
-  Parse the buffer and return the digit value if it fits in the specified interval
-  or the default value if not.
+  Parse the buffer and return the digit value if it fits
+  in the specified interval or the default value if not.
 
   @param buf the char buffer to parse
   @param idx index to start with
@@ -196,6 +216,15 @@ int8_t HAYES::getValidDigit(char* buf, int8_t idx, int8_t low, int8_t hgh, int8_
   return res;
 }
 
+/**
+  Parse the default buffer and return the digit value if it fits
+  in the specified interval or the default value if not.
+
+  @param low minimal valid value
+  @param hgh maximal valid value
+  @param def default value
+  @return the digit value or default
+*/
 int8_t HAYES::getValidDigit(int8_t low, int8_t hgh, int8_t def) {
   // Get the digit value
   int8_t res = getDigit(def);
@@ -208,6 +237,14 @@ int8_t HAYES::getValidDigit(int8_t low, int8_t hgh, int8_t def) {
   return res;
 }
 
+/**
+  Print a command and its value
+
+  @param cmd the command
+  @param mod the command modifier (&,+,*)
+  @param value the value to print
+  @param newline print a new line after
+*/
 void HAYES::cmdPrint(char cmd, char mod, uint8_t value, bool newline) {
   // Print the command
   if (cmd != '\0') {
@@ -224,10 +261,23 @@ void HAYES::cmdPrint(char cmd, char mod, uint8_t value, bool newline) {
   cmdResult = RC_OK;
 }
 
+/**
+  Print a command and its value, no modifier
+
+  @param cmd the command
+  @param value the value to print
+  @param newline print a new line after
+*/
 void HAYES::cmdPrint(char cmd, uint8_t value, bool newline) {
   cmdPrint(cmd, '\0', value, newline);
 }
 
+/**
+  Print a command and its value, no modifier, get the command
+  from the default buffer.
+
+  @param value the value to print
+*/
 void HAYES::cmdPrint(uint8_t value) {
   // Print the value
   cmdPrint(buf[idx - 1], value);
@@ -235,19 +285,23 @@ void HAYES::cmdPrint(uint8_t value) {
 
 /**
   Print a S register
+
+  @param cfg the configuration structure
+  @param reg the specified S register
+  @param newline print a new line after
 */
-void HAYES::sregPrint(uint8_t r, bool newline) {
+void HAYES::sregPrint(CFG_t *cfg, uint8_t reg, bool newline) {
   // Print the command
   Serial.print(F("S"));
-  if (r < 10) Serial.print(F("0"));
-  Serial.print(r);
+  if (reg < 10) Serial.print(F("0"));
+  Serial.print(reg);
   Serial.print(F(":"));
   // Print the value
-  if (_cfg->sregs[r] < 100)
+  if (cfg->sregs[reg] < 100)
     Serial.print(F("0"));
-  if (_cfg->sregs[r] < 10)
+  if (cfg->sregs[reg] < 10)
     Serial.print(F("0"));
-  Serial.print(_cfg->sregs[r]);
+  Serial.print(cfg->sregs[reg]);
   // Print the newline, if requested
   if (newline) printCRLF();
   else         Serial.print(F(" "));
@@ -255,6 +309,11 @@ void HAYES::sregPrint(uint8_t r, bool newline) {
   cmdResult = RC_OK;
 }
 
+/**
+  Show a configuration profile
+
+  @param cfg the configuration structure
+*/
 void HAYES::showProfile(CFG_t *cfg) {
   // Print the main configuration
   cmdPrint('B', cfg->compro, false);
@@ -279,13 +338,17 @@ void HAYES::showProfile(CFG_t *cfg) {
   cmdPrint('S', '&', cfg->dsropt, false);
   printCRLF();
   // Print the S registers
-  for (uint8_t r = 0; r < 16; r++) {
-    sregPrint(r, false);
-    if (r == 0x07 or r == 0x0F)
+  for (uint8_t reg = 0; reg < 16; reg++) {
+    sregPrint(cfg, reg, false);
+    if (reg == 0x07 or reg == 0x0F)
       printCRLF();
   }
 }
 
+/**
+  Process serial I/O in command mode: read the chars into a buffer,
+  check them, echo them (uppercase), run commands and print results
+*/
 uint8_t HAYES::doSIO() {
   char c;
   // Read from serial only if there is room in buffer
@@ -327,6 +390,9 @@ uint8_t HAYES::doSIO() {
   }
 }
 
+/**
+  Run one or multiple commands
+*/
 void HAYES::doCommand() {
   // Reset the command result
   cmdResult = RC_ERROR;
@@ -367,7 +433,11 @@ void HAYES::printResult(uint8_t code) {
     }
 }
 
+/**
+  AT commands dispatcher: each command detailed
+*/
 void HAYES::dispatch() {
+  int8_t option;
   // Check the first character, could be a symbol or a letter
   switch (buf[idx++]) {
     // Skip over some characters
@@ -403,7 +473,7 @@ void HAYES::dispatch() {
         cmdPrint(_cfg->compro);
       else {
         _cfg->compro = getValidInteger(0, 31, _cfg->compro);
-        if (cmdResult == RC_OK) {
+        if (cmdResult == RC_OK)
           // Change the modem type
           switch (_cfg->compro) {
             case  5:  _afsk->setModemType(V_23_M2); break;
@@ -418,7 +488,6 @@ void HAYES::dispatch() {
               _afsk->setModemType(BELL103);
               cmdResult = RC_ERROR;
           }
-        }
       }
       break;
 
@@ -597,7 +666,7 @@ void HAYES::dispatch() {
         idx = ldx;
         // Check the next character
         if (buf[idx] == '?')
-          sregPrint(_sreg, true);
+          sregPrint(_cfg, _sreg, true);
         else if (buf[idx] == '=') {
           idx++;
           _cfg->sregs[_sreg] = getValidInteger(0, 255, _cfg->sregs[_sreg], (uint8_t)3);
@@ -710,25 +779,36 @@ void HAYES::dispatch() {
           break;
 
         // Show the configuration
-        case 'V': {
-            Serial.println(F("ACTIVE PROFILE:"));
+        case 'V':
+          // Show the active profile
+          if ((buf[idx] == '0') or (buf[idx] == '\0')) {
+            Serial.print(F("ACTIVE PROFILE"));
+            printCRLF();
             showProfile(_cfg);
-            Serial.println();
-            struct CFG_t cfgTemp;
-            cmdResult = profile.read(&cfgTemp) ? RC_OK : RC_ERROR;
-            Serial.println(F("STORED PROFILE:"));
-            showProfile(&cfgTemp);
+          }
+          // Show the stored profiles
+          if ((buf[idx] == '1') or (buf[idx] == '\0')) {
+            for (uint8_t slot = 0; slot < eeProfiles; slot++) {
+              struct CFG_t cfgTemp;
+              cmdResult = profile.read(&cfgTemp, slot, false) ? RC_OK : RC_ERROR;
+              printCRLF();
+              Serial.print(F("STORED PROFILE ")); Serial.print(slot);
+              printCRLF();
+              showProfile(&cfgTemp);
+            }
           }
           break;
 
         // Store the configuration
         case 'W':
-          cmdResult = profile.write(_cfg) ? RC_OK : RC_ERROR;
+          option = getValidDigit(0, eeProfiles - 1, 0);
+          cmdResult = profile.write(_cfg, option) ? RC_OK : RC_ERROR;
           break;
 
         // Read the configuration
         case 'Y':
-          cmdResult = profile.read(_cfg) ? RC_OK : RC_ERROR;
+          option = getValidDigit(0, eeProfiles - 1, 0);
+          cmdResult = profile.read(_cfg, option, false) ? RC_OK : RC_ERROR;
           break;
       }
       break;
@@ -781,6 +861,7 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
              buf[idx] == ',') {
       // Digit or pause character
       dn[ndx++] = buf[idx++];
+      // Check how many digits we have
       if (ndx > len)
         result = false;
     }

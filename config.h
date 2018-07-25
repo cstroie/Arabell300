@@ -26,22 +26,23 @@
 // Sampling frequency
 #define F_SAMPLE    9600
 
-
 #include <Arduino.h>
-// EEPROM
 #include <EEPROM.h>
 
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Arabell300";
-const char VERSION[]  PROGMEM = "v2.31";
+const char VERSION[]  PROGMEM = "v2.32";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DESCRP[]   PROGMEM = "Arduino based Bell 103 and ITU V.21 modem";
 const char FTRS[]     PROGMEM = "a0000403F88004000\r\nb000008\r\nr1005100000000000";
 const char DATE[]     PROGMEM = __DATE__;
 
+
 // Modem configuration
-const uint8_t cfgLen = 32;
+const uint16_t  eeAddress   = 0x0080; // EEPROM address to start storing the configuration to
+const uint8_t   eeProfiles  = 4;      // Number of configuration profiles to store
+const uint8_t   cfgLen      = 32;     // Reserved profile lenght
 struct CFG_t {
   union {
     struct {
@@ -96,18 +97,15 @@ class Profile {
     Profile();
     ~Profile();
 
-    // EEPROM address to store the configuration to
-    uint16_t  eeAddress = 0x0080;
-
-    bool    write(CFG_t *cfg);
-    bool    read(CFG_t *cfg, bool useDefaults = false);
+    // Init, read, write and reset profile
+    void    init (CFG_t *cfg, uint8_t slot = 0);
+    bool    read (CFG_t *cfg, uint8_t slot = 0, bool useDefaults = false);
+    bool    write(CFG_t *cfg, uint8_t slot = 0);
     bool    factory(CFG_t *cfg);
-    void    init(CFG_t *cfg);
 
     // S registers data and functions
     uint8_t getS(CFG_t *cfg, uint8_t reg);
     void    setS(CFG_t *cfg, uint8_t reg, uint8_t value);
-
 
   private:
     uint8_t crc(CFG_t *cfg);
