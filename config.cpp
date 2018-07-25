@@ -26,6 +26,16 @@ Profile::~Profile() {
 }
 
 /**
+  Try to load the specified stored profile or use the factory defaults
+
+  @param cfg the configuration structure
+  @param slot the stored profile
+*/
+void Profile::init(CFG_t *cfg, uint8_t slot) {
+  this->read(cfg, slot, true);
+}
+
+/**
   CRC8 computing
 
   @param inCrc partial CRC
@@ -184,17 +194,43 @@ uint8_t Profile::getS(CFG_t *cfg, uint8_t reg) {
   @param reg the specified S register
   @param value the value to set
 */
-void  Profile::setS(CFG_t *cfg, uint8_t reg, uint8_t value) {
+void Profile::setS(CFG_t *cfg, uint8_t reg, uint8_t value) {
   cfg->sregs[reg] = value;
 }
 
 /**
-  Try to load the specified stored profile or use the factory defaults
+  Get the stored phone number from the specfied slot
 
-  @param cfg the configuration structure
-  @param slot the stored profile
+  @param phn the phone number
+  @param slot the storge slot
+  @return success result
 */
-void Profile::init(CFG_t *cfg, uint8_t slot) {
-  this->read(cfg, slot, true);
+uint8_t Profile::phnGet(char *phn, uint8_t slot) {
+  // Compute the eeprom address
+  uint16_t address = eeAddress + eeProfiles * cfgLen + slot * eePhnLen;
+  // Get the chars
+  for (uint8_t i = 0; i < eePhnLen; i++) {
+    phn[i] = EEPROM.read(address + i);
+    if (phn[i] == '\0') break;
+  }
+  // Minimal validation
+  if (not isalnum(phn[0]))
+    phn[0] = '\0';
 }
 
+/**
+  Set the phone number from the specfied slot
+
+  @param phn the phone number
+  @param slot the storge slot
+*/
+void Profile::phnSet(char *phn, uint8_t slot) {
+  // Compute the eeprom address
+  uint16_t address = eeAddress + eeProfiles * cfgLen + slot * eePhnLen;
+  // Store the chars only if changed
+  for (uint8_t i = 0; i < eePhnLen; i++) {
+    if (EEPROM.read(address + i) != phn[i])
+      EEPROM.write(address + i, phn[i]);
+    if (phn[i] == '\0') break;
+  }
+}

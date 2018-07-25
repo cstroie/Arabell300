@@ -103,7 +103,7 @@ class HAYES {
 
     uint8_t dialCmdMode = 0;
     uint8_t dialReverse = 0;
-    char    dialNumber[21];
+    char    dialNumber[eePhnLen];
     bool    getDialNumber(char *dn, size_t len);
 
 

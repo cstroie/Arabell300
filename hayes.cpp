@@ -180,8 +180,9 @@ int8_t HAYES::getDigit(char* buf, uint8_t idx, int8_t def) {
   int8_t value = def;
   cmdResult = RC_OK;
   // Check the pointed char
-  if ((buf[idx] == '\0') or (buf[idx] == ' '))
-    // If it is the last char ('\0') or space (' '), the value is zero
+  if ((buf[idx] == '\0') or (buf[idx] == ' ') or (buf[idx] == '='))
+    // If it is the last char ('\0') or space (' ') or equal ('='),
+    // the value is zero
     value = 0;
   else if (isdigit(buf[idx]))
     // If it is a digit, get the numeric value
@@ -784,7 +785,7 @@ void HAYES::dispatch() {
         case 'V':
           // Show the active profile
           if ((buf[idx] == '0') or (buf[idx] == '\0')) {
-            Serial.print(F("ACTIVE PROFILE"));
+            Serial.print(F("ACTIVE PROFILE:"));
             printCRLF();
             showProfile(_cfg);
           }
@@ -794,9 +795,20 @@ void HAYES::dispatch() {
               struct CFG_t cfgTemp;
               cmdResult = profile.read(&cfgTemp, slot, false) ? RC_OK : RC_ERROR;
               printCRLF();
-              Serial.print(F("STORED PROFILE ")); Serial.print(slot);
+              Serial.print(F("STORED PROFILE ")); Serial.print(slot); Serial.print(F(":"));
               printCRLF();
               showProfile(&cfgTemp);
+            }
+          }
+          // Show the stored phone numbers
+          if ((buf[idx] == '2') or (buf[idx] == '\0')) {
+            printCRLF();
+            Serial.print(F("TELEPHONE NUMBERS:"));
+            printCRLF();
+            for (uint8_t slot = 0; slot < eePhnNums; slot++) {
+              profile.phnGet(dialNumber, slot);
+              Serial.print(slot); Serial.print(F("=")); Serial.print(dialNumber);
+              printCRLF();
             }
           }
           break;
@@ -811,6 +823,37 @@ void HAYES::dispatch() {
         case 'Y':
           option = getValidDigit(0, eeProfiles - 1, 0);
           cmdResult = profile.read(_cfg, option, false) ? RC_OK : RC_ERROR;
+          break;
+
+        // AT&Z Store Telephone Number
+        case 'Z':
+          cmdResult = RC_OK;
+          if (buf[idx] == '=') {
+            // If the current char is '=', the slot is zero
+            // and the phone number starts at the next char
+            option = 0;
+            idx++;
+          }
+          else if (buf[idx + 1] == '=') {
+            // If the next char is '=', the slot is specified before it
+            // and the phone number starts at the next char
+            option = getValidDigit(0, 3, 0);
+            idx += 2;
+          }
+          else
+            // The slot is zero
+            option = 0;
+          // Get the phone number
+          if (cmdResult == RC_OK) {
+            // Get the dial number and parameters, if valid
+            if (getDialNumber(dialNumber, sizeof(dialNumber) - 1)) {
+              // Store the dial number if the specified position
+              profile.phnSet(dialNumber, option);
+            }
+            else
+              // Invalid dial number
+              cmdResult = RC_ERROR;
+          }
           break;
       }
       break;

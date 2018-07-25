@@ -741,7 +741,7 @@ bool AFSK::checkCarrier() {
   }
   // CD led on if carrier
   if (rx.carrier == ON)
-  PORTB |= _BV(PORTB2);
+    PORTB |= _BV(PORTB2);
   // Return the carrier status
   return rx.carrier;
 }

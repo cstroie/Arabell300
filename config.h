@@ -43,6 +43,8 @@ const char DATE[]     PROGMEM = __DATE__;
 const uint16_t  eeAddress   = 0x0080; // EEPROM address to start storing the configuration to
 const uint8_t   eeProfiles  = 4;      // Number of configuration profiles to store
 const uint8_t   cfgLen      = 32;     // Reserved profile lenght
+const uint8_t   eePhnNums   = 4;      // Number of phone numbers to store
+const uint8_t   eePhnLen    = 32;     // Reserved phone number lenght
 struct CFG_t {
   union {
     struct {
@@ -73,22 +75,22 @@ struct CFG_t {
 };
 
 // The S registers
-const uint8_t sRegs[16] PROGMEM = {0,     // Rings to Auto-Answer
-                                   0,     // Ring Counter
-                                   '+',   // Escape Character
-                                   '\r',  // Carriage Return Character
-                                   '\n',  // Line Feed Character
-                                   '\b',  // Backspace Character
-                                   2,     // Wait Time for Dial Tone
-                                   50,    // Wait Time for Carrier
-                                   2,     // Pause Time for Dial Delay Modifier
-                                   6,     // Carrier Detect Response Time (tenths of a second)
-                                   14,    // Carrier Loss Disconnect Time (tenths of a second)
-                                   95,    // DTMF Tone Duration
-                                   50,    // Escape Prompt Delay
-                                   0,     // Reserved
-                                   0,     // General Bit Mapped Options Status
-                                   0      // Reserved
+const uint8_t sRegs[16] PROGMEM = {0,     //  0 Rings to Auto-Answer
+                                   0,     //  1 Ring Counter
+                                   '+',   //  2 Escape Character
+                                   '\r',  //  3 Carriage Return Character
+                                   '\n',  //  4 Line Feed Character
+                                   '\b',  //  5 Backspace Character
+                                   2,     //  6 Wait Time for Dial Tone
+                                   50,    //  7 Wait Time for Carrier
+                                   2,     //  8 Pause Time for Dial Delay Modifier
+                                   6,     //  9 Carrier Detect Response Time (tenths of a second)
+                                   14,    // 10 Carrier Loss Disconnect Time (tenths of a second)
+                                   95,    // 11 DTMF Tone Duration
+                                   50,    // 12 Escape Prompt Delay
+                                   0,     // 13 Reserved
+                                   0,     // 14 General Bit Mapped Options Status
+                                   0      // 15 Reserved
                                   };
 
 
@@ -106,6 +108,10 @@ class Profile {
     // S registers data and functions
     uint8_t getS(CFG_t *cfg, uint8_t reg);
     void    setS(CFG_t *cfg, uint8_t reg, uint8_t value);
+
+    // Phone numbers storage
+    uint8_t phnGet(char *phn, uint8_t slot);
+    void phnSet(char *phn, uint8_t slot);
 
   private:
     uint8_t crc(CFG_t *cfg);
