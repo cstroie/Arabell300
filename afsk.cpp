@@ -717,30 +717,29 @@ void AFSK::setCarrier(uint8_t onoff) {
 
 /**
   Check the incoming carrier
+
+  @return the carrier detection status
 */
 bool AFSK::checkCarrier() {
-  // Use the decoder to check for carrier
-  cdCount = 0;
-  rx.carrier = OFF;
   // TODO CD led off
-  rx.state = CARRIER;
-
-  // Check the carrier for at most S7 seconds
-  uint32_t timeout = millis() + _cfg->sregs[7] * 1000;
-  while (millis() < timeout) {
-    // Try to break on '+'
-    // FIXME Use the doSIO routine, in command mode
-    char c = Serial.read();
-    if (c == _cfg->sregs[2]) {
-      Serial.flush();
-      break;
-    }
-    // Check the carrier
-    if (rx.carrier == ON) {
-      // TODO CD led on
-      break;
+  // If the value specified in S7 is zero, don't wait
+  // for the carrier, report as found
+  if (_cfg->sregs[7] == 0)
+    rx.carrier = ON;
+  else {
+    // Use the decoder to check for carrier
+    rx.state = CARRIER;
+    rx.carrier = OFF;
+    cdCount = 0;
+    // Check the carrier for at most S7 seconds
+    uint32_t timeout = millis() + _cfg->sregs[7] * 1000;
+    while (millis() < timeout) {
+      // Stop answering if there is any char on serial
+      if (Serial.available() or rx.carrier == ON)
+        break;
     }
   }
+  // TODO CD led on or off
   // Return the carrier status
   return rx.carrier;
 }
