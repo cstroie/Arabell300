@@ -63,7 +63,7 @@ uint8_t Profile::CRC8(uint8_t inCrc, uint8_t inData) {
 uint8_t Profile::crc(CFG_t *cfg) {
   // Compute the CRC8 checksum of the data
   uint8_t crc8 = 0;
-  for (uint8_t i = 1; i < cfgLen; i++)
+  for (uint8_t i = 1; i < eeProfLen; i++)
     crc8 = this->CRC8(crc8, cfg->data[i]);
   return crc8;
 }
@@ -82,7 +82,7 @@ bool Profile::equal(CFG_t *cfg1, CFG_t *cfg2) {
     result = false;
   else
     // Compare the overlayed array of the two structures
-    for (uint8_t i = 1; i < cfgLen; i++)
+    for (uint8_t i = 1; i < eeProfLen; i++)
       if (cfg1->data[i] != cfg2->data[i])
         result = false;
   return result;
@@ -99,7 +99,7 @@ bool Profile::write(CFG_t *cfg, uint8_t slot) {
   // Temporary configuration structure
   struct CFG_t cfgTemp;
   // Read the data from EEPROM into the temporary structure
-  EEPROM.get(eeAddress + slot * cfgLen, cfgTemp.data);
+  EEPROM.get(eeAddress + slot * eeProfLen, cfgTemp.data);
   // Compute the CRC8 checksum of the read data
   uint8_t crc8 = this->crc(&cfgTemp);
   // Compute the CRC8 checksum of the actual data, make sure S1 is zero
@@ -108,10 +108,10 @@ bool Profile::write(CFG_t *cfg, uint8_t slot) {
   // Compare the new and the stored data and check if the stored data is valid
   if (not this->equal(cfg, &cfgTemp) or (cfgTemp.crc8 != crc8)) {
     // Copy the actual data to the temporary structure
-    for (uint8_t i = 0; i < cfgLen; i++)
+    for (uint8_t i = 0; i < eeProfLen; i++)
       cfgTemp.data[i] = cfg->data[i];
     // Write the data
-    EEPROM.put(eeAddress + slot * cfgLen, cfgTemp.data);
+    EEPROM.put(eeAddress + slot * eeProfLen, cfgTemp.data);
   }
   // Always return true, even if data is not written
   return true;
@@ -129,13 +129,13 @@ bool Profile::read(CFG_t *cfg, uint8_t slot, bool useDefaults) {
   // Temporary configuration structure
   struct CFG_t cfgTemp;
   // Read the data from EEPROM into the temporary structure
-  EEPROM.get(eeAddress + slot * cfgLen, cfgTemp);
+  EEPROM.get(eeAddress + slot * eeProfLen, cfgTemp);
   // Compute the CRC8 checksum of the read data
   uint8_t crc8 = this->crc(&cfgTemp);
   // And compare with the read crc8 checksum, also check S1
   if (cfgTemp.crc8 == crc8 and cfgTemp.sregs[1] == 0)
     // Copy the temporary structure to configuration and the crc8
-    for (uint8_t i = 0; i < cfgLen; i++)
+    for (uint8_t i = 0; i < eeProfLen; i++)
       cfg->data[i] = cfgTemp.data[i];
   else if (useDefaults)
     factory(cfg);
@@ -183,7 +183,7 @@ bool Profile::factory(CFG_t *cfg) {
   @param reg the specified S register
   @return the register value
 */
-uint8_t Profile::getS(CFG_t *cfg, uint8_t reg) {
+uint8_t Profile::sregGet(CFG_t *cfg, uint8_t reg) {
   return cfg->sregs[reg];
 }
 
@@ -194,43 +194,43 @@ uint8_t Profile::getS(CFG_t *cfg, uint8_t reg) {
   @param reg the specified S register
   @param value the value to set
 */
-void Profile::setS(CFG_t *cfg, uint8_t reg, uint8_t value) {
+void Profile::sregSet(CFG_t *cfg, uint8_t reg, uint8_t value) {
   cfg->sregs[reg] = value;
 }
 
 /**
   Get the stored phone number from the specfied slot
 
-  @param phn the phone number
+  @param phone the phone number
   @param slot the storge slot
   @return success result
 */
-uint8_t Profile::phnGet(char *phn, uint8_t slot) {
+uint8_t Profile::pbGet(char *phone, uint8_t slot) {
   // Compute the eeprom address
-  uint16_t address = eeAddress + eeProfiles * cfgLen + slot * eePhnLen;
+  uint16_t address = eeAddress + eeProfNums * eeProfLen + slot * eePhoneLen;
   // Get the chars
-  for (uint8_t i = 0; i < eePhnLen; i++) {
-    phn[i] = EEPROM.read(address + i);
-    if (phn[i] == '\0') break;
+  for (uint8_t i = 0; i < eePhoneLen; i++) {
+    phone[i] = EEPROM.read(address + i);
+    if (phone[i] == '\0') break;
   }
   // Minimal validation
-  if (phn[0] != '\0' and strchr_P(PSTR("TP0123456789*#"), phn[0]) == NULL)
-    phn[0] = '\0';
+  if (phone[0] != '\0' and strchr_P(PSTR("TP0123456789*#"), phone[0]) == NULL)
+    phone[0] = '\0';
 }
 
 /**
   Set the phone number from the specfied slot
 
-  @param phn the phone number
+  @param phone the phone number
   @param slot the storge slot
 */
-void Profile::phnSet(char *phn, uint8_t slot) {
+void Profile::pbSet(char *phone, uint8_t slot) {
   // Compute the eeprom address
-  uint16_t address = eeAddress + eeProfiles * cfgLen + slot * eePhnLen;
+  uint16_t address = eeAddress + eeProfNums * eeProfLen + slot * eePhoneLen;
   // Store the chars only if changed
-  for (uint8_t i = 0; i < eePhnLen; i++) {
-    if (EEPROM.read(address + i) != phn[i])
-      EEPROM.write(address + i, phn[i]);
-    if (phn[i] == '\0') break;
+  for (uint8_t i = 0; i < eePhoneLen; i++) {
+    if (EEPROM.read(address + i) != phone[i])
+      EEPROM.write(address + i, phone[i]);
+    if (phone[i] == '\0') break;
   }
 }

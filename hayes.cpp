@@ -21,9 +21,9 @@
 
 Profile profile;
 
-HAYES::HAYES(CFG_t *cfg, AFSK *afsk): _cfg(cfg), _afsk(afsk) {
+HAYES::HAYES(CFG_t *conf, AFSK *afsk): cfg(conf), afskModem(afsk) {
   // Try to restore the profile or use factory defaults
-  profile.init(_cfg);
+  profile.init(cfg);
 }
 
 HAYES::~HAYES() {
@@ -33,8 +33,8 @@ HAYES::~HAYES() {
   Print \r\n, as configured in S registers
 */
 void HAYES::printCRLF() {
-  Serial.write(_cfg->sregs[3]);
-  Serial.write(_cfg->sregs[4]);
+  Serial.write(cfg->sregs[3]);
+  Serial.write(cfg->sregs[4]);
 }
 
 /**
@@ -287,22 +287,22 @@ void HAYES::cmdPrint(uint8_t value) {
 /**
   Print a S register
 
-  @param cfg the configuration structure
+  @param conf the configuration structure
   @param reg the specified S register
   @param newline print a new line after
 */
-void HAYES::sregPrint(CFG_t *cfg, uint8_t reg, bool newline) {
+void HAYES::sregPrint(CFG_t *conf, uint8_t reg, bool newline) {
   // Print the command
   Serial.print(F("S"));
   if (reg < 10) Serial.print(F("0"));
   Serial.print(reg);
   Serial.print(F(":"));
   // Print the value
-  if (cfg->sregs[reg] < 100)
+  if (conf->sregs[reg] < 100)
     Serial.print(F("0"));
-  if (cfg->sregs[reg] < 10)
+  if (conf->sregs[reg] < 10)
     Serial.print(F("0"));
-  Serial.print(cfg->sregs[reg]);
+  Serial.print(conf->sregs[reg]);
   // Print the newline, if requested
   if (newline) printCRLF();
   else         Serial.print(F(" "));
@@ -313,34 +313,34 @@ void HAYES::sregPrint(CFG_t *cfg, uint8_t reg, bool newline) {
 /**
   Show a configuration profile
 
-  @param cfg the configuration structure
+  @param conf the configuration structure
 */
-void HAYES::showProfile(CFG_t *cfg) {
+void HAYES::showProfile(CFG_t *conf) {
   // Print the main configuration
-  cmdPrint('B', cfg->compro, false);
-  cmdPrint('C', cfg->txcarr, false);
-  cmdPrint('E', cfg->cmecho, false);
-  cmdPrint('F', cfg->dtecho, false);
-  cmdPrint('L', cfg->spklvl, false);
-  cmdPrint('M', cfg->spkmod, false);
-  if (not cfg->dialpt) Serial.print(F("P "));
-  cmdPrint('Q', cfg->quiet,  false);
-  if (cfg->dialpt) Serial.print(F("T "));
-  cmdPrint('V', cfg->verbal, false);
-  cmdPrint('X', cfg->selcpm, false);
+  cmdPrint('B', conf->compro, false);
+  cmdPrint('C', conf->txcarr, false);
+  cmdPrint('E', conf->cmecho, false);
+  cmdPrint('F', conf->dtecho, false);
+  cmdPrint('L', conf->spklvl, false);
+  cmdPrint('M', conf->spkmod, false);
+  if (not conf->dialpt) Serial.print(F("P "));
+  cmdPrint('Q', conf->quiet,  false);
+  if (conf->dialpt) Serial.print(F("T "));
+  cmdPrint('V', conf->verbal, false);
+  cmdPrint('X', conf->selcpm, false);
   printCRLF();
-  cmdPrint('A', '&', cfg->revans, false);
-  cmdPrint('C', '&', cfg->dcdopt, false);
-  cmdPrint('D', '&', cfg->dtropt, false);
-  cmdPrint('K', '&', cfg->flwctr, false);
-  cmdPrint('L', '&', cfg->lnetpe, false);
-  cmdPrint('P', '&', cfg->plsrto, false);
-  cmdPrint('R', '&', cfg->rtsopt, false);
-  cmdPrint('S', '&', cfg->dsropt, false);
+  cmdPrint('A', '&', conf->revans, false);
+  cmdPrint('C', '&', conf->dcdopt, false);
+  cmdPrint('D', '&', conf->dtropt, false);
+  cmdPrint('K', '&', conf->flwctr, false);
+  cmdPrint('L', '&', conf->lnetpe, false);
+  cmdPrint('P', '&', conf->plsrto, false);
+  cmdPrint('R', '&', conf->rtsopt, false);
+  cmdPrint('S', '&', conf->dsropt, false);
   printCRLF();
   // Print the S registers
   for (uint8_t reg = 0; reg < 16; reg++) {
-    sregPrint(cfg, reg, false);
+    sregPrint(conf, reg, false);
     if (reg == 0x07 or reg == 0x0F)
       printCRLF();
   }
@@ -360,10 +360,10 @@ uint8_t HAYES::doSIO() {
       // Uppercase
       c = toupper(c);
       // Local terminal command mode echo
-      if (_cfg->cmecho)
+      if (cfg->cmecho)
         Serial.write(c);
       // Check the character
-      if (c == _cfg->sregs[5] and len > 0)
+      if (c == cfg->sregs[5] and len > 0)
         // Backspace
         len--;
       else
@@ -423,8 +423,8 @@ void HAYES::doCommand() {
   @param code the response code
 */
 void HAYES::printResult(uint8_t code) {
-  if (code != RC_NONE and _cfg->quiet != 1)
-    if (_cfg->verbal) {
+  if (code != RC_NONE and cfg->quiet != 1)
+    if (cfg->verbal) {
       printCRLF();
       print_P(rcMsg[code], true);
     }
@@ -450,45 +450,41 @@ void HAYES::dispatch() {
     case 'A':
       cmdResult = RC_ERROR;
       // Phase 1: Set direction
-      _afsk->setDirection(ANSWERING);
+      afskModem->setDirection(ANSWERING);
       // Phase 2: Go online
-      _afsk->setLine(ON);
+      afskModem->setLine(ON);
       // Phase 2: Answering carrier on (after a while)
-      _afsk->setCarrier(ON);
+      afskModem->setCarrier(ON);
       // Phase 3: Wait for originating carrier for S7 seconds
-      if (_afsk->checkCarrier()) {
+      if (afskModem->checkCarrier()) {
         // Phase 4: Data mode if carrier found
-        _afsk->setMode(DATA_MODE);
+        afskModem->setMode(DATA_MODE);
         cmdResult = RC_CONNECT;
       }
       else {
         // No carrier, go offline
-        _afsk->setLine(OFF);
+        afskModem->setLine(OFF);
         cmdResult = RC_NO_CARRIER;
       }
       // Disable result codes if ATQ2
-      if (_cfg->quiet == 2) cmdResult = RC_NONE;
+      if (cfg->quiet == 2) cmdResult = RC_NONE;
       break;
 
     // ATB Select Communication Protocol
     case 'B':
       if (buf[idx] == '?')
-        cmdPrint(_cfg->compro);
+        cmdPrint(cfg->compro);
       else {
-        _cfg->compro = getValidInteger(0, 31, _cfg->compro);
+        cfg->compro = getValidInteger(0, 31, cfg->compro);
         if (cmdResult == RC_OK)
           // Change the modem type
-          switch (_cfg->compro) {
-            case  5:  _afsk->setModemType(V_23_M2); break;
-            case 15:  _afsk->setModemType(V_21);    break;
-            case 16:  _afsk->setModemType(BELL103); break;
-            case 23:  _afsk->setModemType(V_23_M1); break;
-            // Dummy value for RTTY
-            case 31:  _afsk->setModemType(RTTY); break;
+          switch (cfg->compro) {
+            case 15:  afskModem->setModemType(V_21);    break;
+            case 16:  afskModem->setModemType(BELL103); break;
             // Default to Bell 103
             default:
-              _cfg->compro = 16;
-              _afsk->setModemType(BELL103);
+              cfg->compro = 16;
+              afskModem->setModemType(BELL103);
               cmdResult = RC_ERROR;
           }
       }
@@ -497,10 +493,10 @@ void HAYES::dispatch() {
     // ATC Transmit carrier
     case 'C':
       if (buf[idx] == '?')
-        cmdPrint(_cfg->txcarr);
+        cmdPrint(cfg->txcarr);
       else {
-        _cfg->txcarr = getValidDigit(0, 1, _cfg->txcarr);
-        _afsk->setCarrier(ON);
+        cfg->txcarr = getValidDigit(0, 1, cfg->txcarr);
+        afskModem->setCarrier(ON);
       }
       break;
 
@@ -510,27 +506,27 @@ void HAYES::dispatch() {
       // Phase 1: Get the dial number and parameters
       if (getDialNumber(dialNumber, sizeof(dialNumber) - 1)) {
         // Phase 2: Set direction
-        _afsk->setDirection(ORIGINATING, dialReverse);
+        afskModem->setDirection(ORIGINATING, dialReverse);
         // Phase 3: Go online
-        _afsk->setLine(ON);
+        afskModem->setLine(ON);
         // Phase 4: Wait for dialtone / busy (NO_DIALTONE / BUSY)
         // Phase 5: Dial: DTMF/Pulses
-        if (_afsk->dial(dialNumber)) {
+        if (afskModem->dial(dialNumber)) {
           // Phase 6: Wait for incoming carrier for S7 seconds
-          if (_afsk->checkCarrier()) {
+          if (afskModem->checkCarrier()) {
             // Phase 7: Enable outgoing carrier
-            _afsk->setCarrier(ON);
+            afskModem->setCarrier(ON);
             // Phase 8: Enter data mode or stay in command mode
             if (dialCmdMode)
               cmdResult = RC_OK;
             else {
-              _afsk->setMode(DATA_MODE);
+              afskModem->setMode(DATA_MODE);
               cmdResult = RC_CONNECT;
             }
           }
           else {
             // No carrier, go offline
-            _afsk->setLine(OFF);
+            afskModem->setLine(OFF);
             cmdResult = RC_NO_CARRIER;
           }
         }
@@ -546,22 +542,22 @@ void HAYES::dispatch() {
     // ATE Set local command mode echo
     case 'E':
       if (buf[idx] == '?')
-        cmdPrint(_cfg->cmecho);
+        cmdPrint(cfg->cmecho);
       else
-        _cfg->cmecho = getValidDigit(0, 1, _cfg->cmecho);
+        cfg->cmecho = getValidDigit(0, 1, cfg->cmecho);
       break;
 
     // ATF Set local data mode echo
     case 'F':
       if (buf[idx] == '?')
-        cmdPrint(_cfg->dtecho);
+        cmdPrint(cfg->dtecho);
       else
-        _cfg->dtecho = getValidDigit(0, 1, _cfg->dtecho);
+        cfg->dtecho = getValidDigit(0, 1, cfg->dtecho);
       break;
 
     // ATH Hook control
     case 'H':
-      _afsk->setLine(getValidDigit(0, 1, 0));
+      afskModem->setLine(getValidDigit(0, 1, 0));
       break;
 
     // ATI Show info
@@ -580,7 +576,7 @@ void HAYES::dispatch() {
 
           // 1 ROM checksum
           if (rqInfo & 0x01)
-            cmdPrint('\0', _cfg->crc8);
+            cmdPrint('\0', cfg->crc8);
           rqInfo = rqInfo >> 1;
 
           // 2 Tests ROM checksum THEN reports it
@@ -621,17 +617,17 @@ void HAYES::dispatch() {
     // ATL Set speaker volume level
     case 'L':
       if (buf[idx] == '?')
-        cmdPrint(_cfg->spklvl);
+        cmdPrint(cfg->spklvl);
       else
-        _cfg->spklvl = getValidDigit(0, 3, _cfg->spklvl);
+        cfg->spklvl = getValidDigit(0, 3, cfg->spklvl);
       break;
 
     // ATM Speaker control
     case 'M':
       if (buf[idx] == '?')
-        cmdPrint(_cfg->spkmod);
+        cmdPrint(cfg->spkmod);
       else
-        _cfg->spkmod = getValidDigit(0, 3, _cfg->spkmod);
+        cfg->spkmod = getValidDigit(0, 3, cfg->spkmod);
       break;
 
     // ATO Return to data mode
@@ -639,21 +635,21 @@ void HAYES::dispatch() {
       // No more response messages
       cmdResult = RC_NONE;
       // Data mode
-      _afsk->setMode(getValidDigit(0, 1, 0) + 1);
+      afskModem->setMode(getValidDigit(0, 1, 0) + 1);
       break;
 
     // ATP Pulse dialing
     case 'P':
-      _cfg->dialpt = OFF;
+      cfg->dialpt = OFF;
       cmdResult = RC_OK;
       break;
 
     // ATQ Quiet Mode
     case 'Q':
       if (buf[idx] == '?')
-        cmdPrint(_cfg->quiet);
+        cmdPrint(cfg->quiet);
       else
-        _cfg->quiet = getValidDigit(0, 2, _cfg->quiet);
+        cfg->quiet = getValidDigit(0, 2, cfg->quiet);
       break;
 
     // ATS Addresses An S-register
@@ -669,34 +665,34 @@ void HAYES::dispatch() {
         idx = ldx;
         // Check the next character
         if (buf[idx] == '?')
-          sregPrint(_cfg, _sreg, true);
+          sregPrint(cfg, _sreg, true);
         else if (buf[idx] == '=') {
           idx++;
-          _cfg->sregs[_sreg] = getValidInteger(0, 255, _cfg->sregs[_sreg], (uint8_t)3);
+          cfg->sregs[_sreg] = getValidInteger(0, 255, cfg->sregs[_sreg], (uint8_t)3);
         }
       }
       break;
 
     // ATT Tone dialing
     case 'T':
-      _cfg->dialpt = ON;
+      cfg->dialpt = ON;
       cmdResult = RC_OK;
       break;
 
     // ATV Verbose mode
     case 'V':
       if (buf[idx] == '?')
-        cmdPrint(_cfg->verbal);
+        cmdPrint(cfg->verbal);
       else
-        _cfg->verbal = getValidDigit(0, 1, _cfg->verbal);
+        cfg->verbal = getValidDigit(0, 1, cfg->verbal);
       break;
 
     // ATX Select call progress method
     case 'X':
       if (buf[idx] == '?')
-        cmdPrint(_cfg->selcpm);
+        cmdPrint(cfg->selcpm);
       else
-        _cfg->selcpm = getValidDigit(0, 1, _cfg->selcpm);
+        cfg->selcpm = getValidDigit(0, 1, cfg->selcpm);
       break;
 
     // ATZ Reset
@@ -715,70 +711,70 @@ void HAYES::dispatch() {
         // Reverse answering frequencies
         case 'A':
           if (buf[idx] == '?')
-            cmdPrint('A', '&', _cfg->revans);
+            cmdPrint('A', '&', cfg->revans);
           else
-            _cfg->revans = getValidDigit(0, 1, _cfg->revans);
+            cfg->revans = getValidDigit(0, 1, cfg->revans);
           break;
 
         // DCD Option
         case 'C':
           if (buf[idx] == '?')
-            cmdPrint('C', '&', _cfg->dcdopt);
+            cmdPrint('C', '&', cfg->dcdopt);
           else
-            _cfg->dcdopt = getValidDigit(0, 1, _cfg->dcdopt);
+            cfg->dcdopt = getValidDigit(0, 1, cfg->dcdopt);
           break;
 
         // DTR Option
         case 'D':
           if (buf[idx] == '?')
-            cmdPrint('D', '&', _cfg->dtropt);
+            cmdPrint('D', '&', cfg->dtropt);
           else
-            _cfg->dtropt = getValidDigit(0, 3, _cfg->dtropt);
+            cfg->dtropt = getValidDigit(0, 3, cfg->dtropt);
           break;
 
         // Factory defaults
         case 'F':
-          cmdResult = profile.factory(_cfg) ? RC_OK : RC_ERROR;
+          cmdResult = profile.factory(cfg) ? RC_OK : RC_ERROR;
           break;
 
         // Flow Control Selection
         case 'K':
           if (buf[idx] == '?')
-            cmdPrint('K', '&', _cfg->flwctr);
+            cmdPrint('K', '&', cfg->flwctr);
           else
-            _cfg->flwctr = getValidDigit(0, 6, _cfg->flwctr);
+            cfg->flwctr = getValidDigit(0, 6, cfg->flwctr);
           break;
 
         // Line Type Selection
         case 'L':
           if (buf[idx] == '?')
-            cmdPrint('L', '&', _cfg->lnetpe);
+            cmdPrint('L', '&', cfg->lnetpe);
           else
-            _cfg->lnetpe = getValidDigit(0, 1, _cfg->lnetpe);
+            cfg->lnetpe = getValidDigit(0, 1, cfg->lnetpe);
           break;
 
         // Make/Break Ratio for Pulse Dialing
         case 'P':
           if (buf[idx] == '?')
-            cmdPrint('P', '&', _cfg->plsrto);
+            cmdPrint('P', '&', cfg->plsrto);
           else
-            _cfg->plsrto = getValidDigit(0, 3, _cfg->plsrto);
+            cfg->plsrto = getValidDigit(0, 3, cfg->plsrto);
           break;
 
         // RTS/CTS Option Selection
         case 'R':
           if (buf[idx] == '?')
-            cmdPrint('R', '&', _cfg->rtsopt);
+            cmdPrint('R', '&', cfg->rtsopt);
           else
-            _cfg->rtsopt = getValidDigit(0, 1, _cfg->rtsopt);
+            cfg->rtsopt = getValidDigit(0, 1, cfg->rtsopt);
           break;
 
         // DSR Option Selection
         case 'S':
           if (buf[idx] == '?')
-            cmdPrint('S', '&', _cfg->dsropt);
+            cmdPrint('S', '&', cfg->dsropt);
           else
-            _cfg->dsropt = getValidDigit(0, 2, _cfg->dsropt);
+            cfg->dsropt = getValidDigit(0, 2, cfg->dsropt);
           break;
 
         // Show the configuration
@@ -788,11 +784,11 @@ void HAYES::dispatch() {
             printCRLF();
             Serial.print(F("ACTIVE PROFILE:"));
             printCRLF();
-            showProfile(_cfg);
+            showProfile(cfg);
           }
           // Show the stored profiles
           if ((buf[idx] == '1') or (buf[idx] == '\0')) {
-            for (uint8_t slot = 0; slot < eeProfiles; slot++) {
+            for (uint8_t slot = 0; slot < eeProfNums; slot++) {
               struct CFG_t cfgTemp;
               cmdResult = profile.read(&cfgTemp, slot, false) ? RC_OK : RC_ERROR;
               printCRLF();
@@ -804,12 +800,12 @@ void HAYES::dispatch() {
           }
           // Show the stored phone numbers
           if ((buf[idx] == '2') or (buf[idx] == '\0')) {
-            char dn[eePhnLen];
+            char dn[eePhoneLen];
             printCRLF();
             Serial.print(F("TELEPHONE NUMBERS:"));
             printCRLF();
-            for (uint8_t slot = 0; slot < eePhnNums; slot++) {
-              profile.phnGet(dn, slot);
+            for (uint8_t slot = 0; slot < eePhoneNums; slot++) {
+              profile.pbGet(dn, slot);
               Serial.print(slot); Serial.print(F("=")); Serial.print(dn);
               printCRLF();
             }
@@ -819,14 +815,14 @@ void HAYES::dispatch() {
 
         // Store the configuration
         case 'W':
-          option = getValidDigit(0, eeProfiles - 1, 0);
-          cmdResult = profile.write(_cfg, option) ? RC_OK : RC_ERROR;
+          option = getValidDigit(0, eeProfNums - 1, 0);
+          cmdResult = profile.write(cfg, option) ? RC_OK : RC_ERROR;
           break;
 
         // Read the configuration
         case 'Y':
-          option = getValidDigit(0, eeProfiles - 1, 0);
-          cmdResult = profile.read(_cfg, option, false) ? RC_OK : RC_ERROR;
+          option = getValidDigit(0, eeProfNums - 1, 0);
+          cmdResult = profile.read(cfg, option, false) ? RC_OK : RC_ERROR;
           break;
 
         // AT&Z Store Telephone Number
@@ -852,7 +848,7 @@ void HAYES::dispatch() {
             // Get the dial number and parameters, if valid
             if (getDialNumber(dialNumber, sizeof(dialNumber) - 1)) {
               // Store the dial number if the specified position
-              profile.phnSet(dialNumber, option);
+              profile.pbSet(dialNumber, option);
             }
             else
               // Invalid dial number
@@ -919,9 +915,9 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
     else if (buf[idx] == 'S' and ndx == 0) {
       // Callbook dialling, next digit is the callbook entry
       idx++;
-      if (buf[idx] >= '0' and buf[idx] < '0' + eePhnNums) {
+      if (buf[idx] >= '0' and buf[idx] < '0' + eePhoneNums) {
         uint8_t entry = buf[idx] - '0';
-        profile.phnGet(dn, entry);
+        profile.pbGet(dn, entry);
         // Quick check the validity
         if (dn[0] == '\0')
           // Invalid stored number
@@ -934,12 +930,12 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
     }
     else if (buf[idx] == 'T' and ndx == 0) {
       // Tone dialing mode, first character
-      _cfg->dialpt = ON;
+      cfg->dialpt = ON;
       idx++;
     }
     else if (buf[idx] == 'P' and ndx == 0) {
       // Pulse dialing mode, first character
-      _cfg->dialpt = OFF;
+      cfg->dialpt = OFF;
       idx++;
     }
     else if (isdigit(buf[idx]) or

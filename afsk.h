@@ -93,107 +93,17 @@ struct AFSK_t {
 
 // Bell103 configuration
 static AFSK_t BELL103 = {
-  {
-    {1070, 1270}, // 934uS  14953CPU, 787uS  12598CPU
-    {0, 0},
-    10, 1
-  },
-  {
-    {2025, 2225}, // 493uS   7901CPU, 449uS   7191CPU
-    {0, 0},
-    8,  0
-  },
-  300,
-  8,
-  1,
+  {{1070, 1270}, {0, 0}, 10, 1},
+  {{2025, 2225}, {0, 0},  8, 0},
+  300, 8, 1,
 };
 
 // V.21 configuration
 static AFSK_t V_21 = {
-  {
-    {1180,  980},
-    {0, 0},
-    11, 0
-  },
-  {
-    {1850, 1650},
-    {0, 0},
-    7, 0
-  },
-  300,
-  8,
-  1,
+  {{1180,  980}, {0, 0}, 11, 0},
+  {{1850, 1650}, {0, 0},  7, 0},
+  300, 8, 1,
 };
-
-// Bell202 configuration
-static AFSK_t BELL202 = {
-  {
-    {2200, 1200},
-    {0, 0},
-    4, 1
-  },
-  {
-    {2200, 1200},
-    {0, 0},
-    4, 1
-  },
-  1200,
-  8,
-  0,
-};
-
-// V.23 Mode1 configuration
-static AFSK_t V_23_M1 = {
-  {
-    {1700, 1300},
-    {0, 0},
-    8, 0
-  },
-  {
-    {1700, 1300},
-    {0, 0},
-    8, 0
-  },
-  600,
-  8,
-  0,
-};
-
-// V.23 Mode2 configuration
-static AFSK_t V_23_M2 = {
-  {
-    {2100, 1300},
-    {0, 0},
-    4, 1,
-  },
-  {
-    {2100, 1300},
-    {0, 0},
-    4, 1,
-  },
-  1200,
-  8,
-  1
-};
-
-// RTTY configuration
-// Live: http://internet-tty.net:8000/ITTY"
-static AFSK_t RTTY = {
-  {
-    {2295, 2125},
-    {0, 0},
-    12, 1
-  },
-  {
-    {2295, 2125},
-    {0, 0},
-    12, 1,
-  },
-  45, // 45.45 baud
-  5,  // 5 bits baudot code, 1.5 stop bits
-  0
-};
-
 
 class AFSK {
   public:
@@ -207,7 +117,7 @@ class AFSK {
     AFSK();
     ~AFSK();
 
-    void init(AFSK_t afsk, CFG_t *cfg);
+    void init(AFSK_t afsk, CFG_t *conf);
     void initSteps();
     void setModemType(AFSK_t afsk);
     void setDirection(uint8_t dir, uint8_t rev = OFF);
@@ -215,7 +125,7 @@ class AFSK {
     void setMode(uint8_t mode);
     void setCarrier(uint8_t onoff);
     bool checkCarrier();
-    bool dial(char *buf);
+    bool dial(char *phone);
     void doTXRX();
     bool doSIO();
 
@@ -223,8 +133,8 @@ class AFSK {
     void simPrint();
 
   private:
-    AFSK_t  _afsk;
-    CFG_t  *_cfg;
+    AFSK_t  cfgAFSK;
+    CFG_t  *cfg;
 
     uint8_t _online   = OFF;     // OnHook / OffHook
     uint8_t _mode     = COMMAND_MODE;   // Modem works in data mode or in command mode

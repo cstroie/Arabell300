@@ -89,6 +89,11 @@ char DTMF::send(char chr) {
 }
 
 uint8_t DTMF::send(char *chrs, size_t len) {
+  for (uint8_t i = 0; i < len; i++)
+    if (chrs[i] != '\0')
+      this->send(chrs[i]);
+    else
+      break;
 }
 
 bool DTMF::getRowCol(char chr) {

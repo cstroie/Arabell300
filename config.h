@@ -21,7 +21,7 @@
 #define CONFIG_H
 
 // CPU frequency correction for sampling timer
-#define F_COR (-220000L)
+#define F_COR (-120000L)
 
 // Sampling frequency
 #define F_SAMPLE    9600
@@ -32,7 +32,7 @@
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Arabell300";
-const char VERSION[]  PROGMEM = "v2.34";
+const char VERSION[]  PROGMEM = "v2.35";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DESCRP[]   PROGMEM = "Arduino based Bell 103 and ITU V.21 AFSK modem";
 const char FTRS[]     PROGMEM = "a0000400080004000\r\nb000008\r\nr1001000000000000";
@@ -40,11 +40,11 @@ const char DATE[]     PROGMEM = __DATE__;
 
 
 // Modem configuration
-const uint16_t  eeAddress   = 0x0080; // EEPROM address to start storing the configuration to
-const uint8_t   eeProfiles  = 4;      // Number of configuration profiles to store
-const uint8_t   cfgLen      = 32;     // Reserved profile lenght
-const uint8_t   eePhnNums   = 4;      // Number of phone numbers to store
-const uint8_t   eePhnLen    = 32;     // Reserved phone number lenght
+const uint16_t  eeAddress   = 0x0080; // EEPROM start address for configuration store
+const uint8_t   eeProfNums  = 4;      // Number of configuration profiles to store
+const uint8_t   eeProfLen   = 32;     // Reserved profile lenght
+const uint8_t   eePhoneNums = 4;      // Number of phone numbers to store
+const uint8_t   eePhoneLen  = 32;     // Reserved phone number lenght
 struct CFG_t {
   union {
     struct {
@@ -70,7 +70,7 @@ struct CFG_t {
 
       uint8_t sregs[16];  // The S registers
     };
-    uint8_t data[cfgLen];
+    uint8_t data[eeProfLen];
   };
 };
 
@@ -106,12 +106,12 @@ class Profile {
     bool    factory(CFG_t *cfg);
 
     // S registers data and functions
-    uint8_t getS(CFG_t *cfg, uint8_t reg);
-    void    setS(CFG_t *cfg, uint8_t reg, uint8_t value);
+    uint8_t sregGet(CFG_t *cfg, uint8_t reg);
+    void    sregSet(CFG_t *cfg, uint8_t reg, uint8_t value);
 
     // Phone numbers storage
-    uint8_t phnGet(char *phn, uint8_t slot);
-    void phnSet(char *phn, uint8_t slot);
+    uint8_t pbGet(char *phone, uint8_t slot);
+    void pbSet(char *phone, uint8_t slot);
 
   private:
     uint8_t crc(CFG_t *cfg);

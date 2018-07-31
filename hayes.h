@@ -55,7 +55,7 @@ const char* const rcMsg[] = {rcOK, rcCONNECT, rcRING, rcNO_CARRIER, rcERROR,
 
 class HAYES {
   public:
-    HAYES(CFG_t *cfg, AFSK *afsk);
+    HAYES(CFG_t *conf, AFSK *afsk);
     ~HAYES();
 
     void printCRLF();
@@ -75,8 +75,8 @@ class HAYES {
     void    dispatch();
 
   private:
-    CFG_t *_cfg;
-    AFSK  *_afsk;
+    CFG_t *cfg;
+    AFSK  *afskModem;
 
     // Input buffer
     char buf[MAX_INPUT_SIZE];
@@ -98,16 +98,16 @@ class HAYES {
     void    cmdPrint(char cmd, uint8_t value, bool newline = true);
     void    cmdPrint(char cmd, char mod, uint8_t value, bool newline = true);
     void    cmdPrint(uint8_t value);
-    void    sregPrint(CFG_t *cfg, uint8_t reg, bool newline = false);
+    void    sregPrint(CFG_t *conf, uint8_t reg, bool newline = false);
 
 
     uint8_t dialCmdMode = 0;
     uint8_t dialReverse = 0;
-    char    dialNumber[eePhnLen];
+    char    dialNumber[eePhoneLen];
     bool    getDialNumber(char *dn, size_t len);
 
 
-    void    showProfile(CFG_t *cfg);
+    void    showProfile(CFG_t *conf);
 
     void    printResult(uint8_t code);
 };

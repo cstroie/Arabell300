@@ -50,16 +50,16 @@ AFSK::~AFSK() {
 
   @param x the afsk modem type
 */
-void AFSK::init(AFSK_t afsk, CFG_t *cfg) {
-  _cfg  = cfg;
+void AFSK::init(AFSK_t afsk, CFG_t *conf) {
+  cfg = conf;
   // Hardware init
   this->initHW();
   // Set the modem type
   this->setModemType(afsk);
   // Set the DTMF pulse and pause durations (S11)
-  dtmf.setDuration(_cfg->sregs[11]);
+  dtmf.setDuration(cfg->sregs[11]);
   // Set the guard time
-  _guard = _cfg->sregs[12] * 20;
+  _guard = cfg->sregs[12] * 20;
 }
 
 /**
@@ -68,7 +68,7 @@ void AFSK::init(AFSK_t afsk, CFG_t *cfg) {
   @param afsk the afsk modem type
 */
 void AFSK::setModemType(AFSK_t afsk) {
-  _afsk = afsk;
+  cfgAFSK = afsk;
   // Compute the wave index steps
   this->initSteps();
   // Go offline, switch to command mode
@@ -76,12 +76,12 @@ void AFSK::setModemType(AFSK_t afsk) {
   // Start as originating modem
   this->setDirection(ORIGINATING);
   // Compute modem specific parameters
-  fulBit = F_SAMPLE / _afsk.baud;
+  fulBit = F_SAMPLE / cfgAFSK.baud;
   hlfBit = fulBit >> 1;
   qrtBit = hlfBit >> 1;
   octBit = qrtBit >> 1;
   // Compute CarrierDetect threshold
-  cdTotal = F_SAMPLE / 10 * _cfg->sregs[9];
+  cdTotal = F_SAMPLE / 10 * cfg->sregs[9];
   cdTotal = cdTotal - (cdTotal >> 4);
 }
 
@@ -91,10 +91,10 @@ void AFSK::setModemType(AFSK_t afsk) {
   @param x the afsk modem to compute for
 */
 void AFSK::initSteps() {
-  _afsk.orig.step[SPACE] = wave.getStep(_afsk.orig.freq[SPACE]);
-  _afsk.orig.step[MARK]  = wave.getStep(_afsk.orig.freq[MARK]);
-  _afsk.answ.step[SPACE] = wave.getStep(_afsk.answ.freq[SPACE]);
-  _afsk.answ.step[MARK]  = wave.getStep(_afsk.answ.freq[MARK]);
+  cfgAFSK.orig.step[SPACE] = wave.getStep(cfgAFSK.orig.freq[SPACE]);
+  cfgAFSK.orig.step[MARK]  = wave.getStep(cfgAFSK.orig.freq[MARK]);
+  cfgAFSK.answ.step[SPACE] = wave.getStep(cfgAFSK.answ.freq[SPACE]);
+  cfgAFSK.answ.step[MARK]  = wave.getStep(cfgAFSK.answ.freq[MARK]);
 }
 
 /**
@@ -229,7 +229,7 @@ void AFSK::txHandle() {
         // We are sending the data bits, keep sending until the last
         case DATA_BIT:
           // Check if we have sent all the bits
-          if (++tx.bits < _afsk.dtbits) {
+          if (++tx.bits < cfgAFSK.dtbits) {
             // Keep sending the data bits, LSB to MSB
             tx.dtbit  = tx.data & 0x01;
             tx.data   = tx.data >> 1;
@@ -475,7 +475,7 @@ void AFSK::rxDecoder(uint8_t bt) {
             rxFIFO.in((rx.bitsum >> 2) + 'A');
 #endif
             // Check if we are still receiving the data bits
-            if (++rx.bits < _afsk.dtbits) {
+            if (++rx.bits < cfgAFSK.dtbits) {
               // Prepare for a new bit: reset the clock and the bitsum
               rx.clk    = 0;
               rx.bitsum = 0;
@@ -537,7 +537,7 @@ bool AFSK::doSIO() {
   if (escCount == 3) {
     // We did, we did taw the escape string!
     // Check for the guard silence (S12)
-    if (now - escLast > _cfg->sregs[12] * 20) {
+    if (now - escLast > cfg->sregs[12] * 20) {
       // This is it, go in command mode
       this->setMode(COMMAND_MODE);
       escCount = 0;
@@ -559,7 +559,7 @@ bool AFSK::doSIO() {
   // Check if there is any data on serial port
   if (available) {
     // Check for "+++" escape sequence (S2)
-    if (Serial.peek() == _cfg->sregs[2]) {
+    if (Serial.peek() == cfg->sregs[2]) {
       // Check when we saw the first '+' (S12)
       if (now - escFirst > _guard) {
         // Check the before guard time too
@@ -591,7 +591,7 @@ bool AFSK::doSIO() {
         c = Serial.read();
         if (txFIFO.in(c))
           // Local data mode echo
-          if (_cfg->dtecho)
+          if (cfg->dtecho)
             Serial.write((char)c);
         // Keep the time
         lstChar = now;
@@ -601,12 +601,12 @@ bool AFSK::doSIO() {
         PORTB |= _BV(PORTB1);
       }
     }
-    else if (not flowControl and _cfg->flwctr != 0) {
+    else if (not flowControl and cfg->flwctr != 0) {
       // FIFO is getting full, check the flow control
-      if (_cfg->flwctr = 4)
+      if (cfg->flwctr = 4)
         // XON/XOFF flow control: XOFF
         Serial.write(0x13);
-      else if (_cfg->flwctr = 3)
+      else if (cfg->flwctr = 3)
         // RTS/CTS flow control
         PORTB &= ~_BV(PORTB2);
       flowControl = true;
@@ -614,10 +614,10 @@ bool AFSK::doSIO() {
 
     // Anytime, try to disable flow control, if we can
     if (flowControl and txFIFO.len() < fifoLow) {
-      if (_cfg->flwctr = 4)
+      if (cfg->flwctr = 4)
         // XON/XOFF flow control: XON
         Serial.write(0x11);
-      else if (_cfg->flwctr = 3)
+      else if (cfg->flwctr = 3)
         // RTS/CTS flow control
         PORTB |= _BV(PORTB2);
       flowControl = false;
@@ -664,13 +664,13 @@ void AFSK::setDirection(uint8_t dir, uint8_t rev) {
   this->setCarrier(OFF);
   // Create TX/RX pointers to ORIGINATING/ANSWERING parameters
   if ((_dir == ORIGINATING and rev == OFF) or
-      (_dir == ANSWERING and _cfg->revans == ON)) {
-    fsqTX = &_afsk.orig;
-    fsqRX = &_afsk.answ;
+      (_dir == ANSWERING and cfg->revans == ON)) {
+    fsqTX = &cfgAFSK.orig;
+    fsqRX = &cfgAFSK.answ;
   }
   else {
-    fsqTX = &_afsk.answ;
-    fsqRX = &_afsk.orig;
+    fsqTX = &cfgAFSK.answ;
+    fsqRX = &cfgAFSK.orig;
   }
   // Clear the FIFOs
   rxFIFO.clear();
@@ -712,7 +712,7 @@ void AFSK::setMode(uint8_t mode) {
   @param onoff carrier mode
 */
 void AFSK::setCarrier(uint8_t onoff) {
-  tx.carrier = onoff & _cfg->txcarr;
+  tx.carrier = onoff & cfg->txcarr;
 }
 
 /**
@@ -725,7 +725,7 @@ bool AFSK::checkCarrier() {
   PORTB &= ~_BV(PORTB2);
   // If the value specified in S7 is zero, don't wait
   // for the carrier, report as found
-  if (_cfg->sregs[7] == 0)
+  if (cfg->sregs[7] == 0)
     rx.carrier = ON;
   else {
     // Use the decoder to check for carrier
@@ -733,7 +733,7 @@ bool AFSK::checkCarrier() {
     rx.carrier = OFF;
     cdCount = 0;
     // Check the carrier for at most S7 seconds
-    uint32_t timeout = millis() + _cfg->sregs[7] * 1000;
+    uint32_t timeout = millis() + cfg->sregs[7] * 1000;
     while (millis() < timeout)
       // Stop answering if there is any char on serial
       if (Serial.available() or rx.carrier == ON)
@@ -749,24 +749,24 @@ bool AFSK::checkCarrier() {
 /**
   Dial a number
 
-  @param number the number to dial
+  @param phone the number to dial
   @return true if completed, false if interrupted
 */
-bool AFSK::dial(char *buf) {
+bool AFSK::dial(char *phone) {
   bool result = true;
   // Disable the carrier
   this->setCarrier(OFF);
   // Sanitize S8 and set the comma delay value
-  if (_cfg->sregs[8] > 6)
-    _cfg->sregs[8] = 2;
-  _commaMax = F_SAMPLE * _cfg->sregs[8];
+  if (cfg->sregs[8] > 6)
+    cfg->sregs[8] = 2;
+  _commaMax = F_SAMPLE * cfg->sregs[8];
   _commaCnt = 0;
   // Clear TX FIFO for storing the dial number into
   txFIFO.clear();
   // Prepend and append comma-delays
   txFIFO.in(',');
-  while (*buf != 0)
-    txFIFO.in(*buf++);
+  while (*phone != 0)
+    txFIFO.in(*phone++);
   txFIFO.in(',');
   // Start dialing
   _dialing = ON;
