@@ -785,6 +785,7 @@ void HAYES::dispatch() {
         case 'V':
           // Show the active profile
           if ((buf[idx] == '0') or (buf[idx] == '\0')) {
+            printCRLF();
             Serial.print(F("ACTIVE PROFILE:"));
             printCRLF();
             showProfile(_cfg);
@@ -797,20 +798,23 @@ void HAYES::dispatch() {
               printCRLF();
               Serial.print(F("STORED PROFILE ")); Serial.print(slot); Serial.print(F(":"));
               printCRLF();
-              showProfile(&cfgTemp);
+              if (cmdResult == RC_OK)
+                showProfile(&cfgTemp);
             }
           }
           // Show the stored phone numbers
           if ((buf[idx] == '2') or (buf[idx] == '\0')) {
+            char dn[eePhnLen];
             printCRLF();
             Serial.print(F("TELEPHONE NUMBERS:"));
             printCRLF();
             for (uint8_t slot = 0; slot < eePhnNums; slot++) {
-              profile.phnGet(dialNumber, slot);
-              Serial.print(slot); Serial.print(F("=")); Serial.print(dialNumber);
+              profile.phnGet(dn, slot);
+              Serial.print(slot); Serial.print(F("=")); Serial.print(dn);
               printCRLF();
             }
           }
+          cmdResult = RC_OK;
           break;
 
         // Store the configuration
@@ -911,6 +915,22 @@ bool HAYES::getDialNumber(char *dn, size_t len) {
         buf[idx] == ')') {
       // Skip over some characters
       idx++;
+    }
+    else if (buf[idx] == 'S' and ndx == 0) {
+      // Callbook dialling, next digit is the callbook entry
+      idx++;
+      if (buf[idx] >= '0' and buf[idx] < '0' + eePhnNums) {
+        uint8_t entry = buf[idx] - '0';
+        profile.phnGet(dn, entry);
+        // Quick check the validity
+        if (dn[0] == '\0')
+          // Invalid stored number
+          result = false;
+      }
+      else
+        // No valid phonebook entry
+        result = false;
+      break;
     }
     else if (buf[idx] == 'T' and ndx == 0) {
       // Tone dialing mode, first character

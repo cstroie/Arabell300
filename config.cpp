@@ -214,7 +214,7 @@ uint8_t Profile::phnGet(char *phn, uint8_t slot) {
     if (phn[i] == '\0') break;
   }
   // Minimal validation
-  if (not isalnum(phn[0]))
+  if (phn[0] != '\0' and strchr_P(PSTR("TP0123456789*#"), phn[0]) == NULL)
     phn[0] = '\0';
 }
 
