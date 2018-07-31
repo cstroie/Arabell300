@@ -857,6 +857,29 @@ void HAYES::dispatch() {
           break;
       }
       break;
+
+    // Partial '+' extension
+    case '+':
+      if (strncmp(buf[idx + 1], "FCLASS", 6) == 0) {
+        idx += 7;
+        if (buf[idx] == '?' or
+            (buf[idx] == '=' and buf[idx + 1] == '?')) {
+          // No FAX capabilities
+          Serial.print("0");
+          printCRLF();
+          // Response code OK
+          cmdResult = RC_OK;
+        }
+        else if (buf[idx] == '=' and buf[idx + 1] == '0') {
+          // Response code OK
+          cmdResult = RC_OK;
+        }
+        else
+          // Anything else is ERROR
+          cmdResult = RC_ERROR;
+        break;
+      }
+      break;
   }
 }
 
