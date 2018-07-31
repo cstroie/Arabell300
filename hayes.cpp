@@ -860,8 +860,8 @@ void HAYES::dispatch() {
 
     // Partial '+' extension
     case '+':
-      if (strncmp(buf[idx + 1], "FCLASS", 6) == 0) {
-        idx += 7;
+      if (strncmp(&buf[idx], "FCLASS", 6) == 0) {
+        idx += 6;
         if (buf[idx] == '?' or
             (buf[idx] == '=' and buf[idx + 1] == '?')) {
           // No FAX capabilities
