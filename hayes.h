@@ -80,6 +80,8 @@ class HAYES {
 
     // Input buffer
     char buf[MAX_INPUT_SIZE];
+    // Starting character
+    char sChr = '\0';
     // Line buffer length
     int8_t len = 0;
     // Buffer index

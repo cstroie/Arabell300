@@ -366,9 +366,64 @@ uint8_t HAYES::doSIO() {
       if (c == cfg->sregs[5] and len > 0)
         // Backspace
         len--;
-      else
-        // Append to buffer
+      else if (len == 0) {
+        // First character in command buffer
+        if (c == 'A')
+          // First character is capital 'A'
+          sChr = c;
+        else {
+          // Anything else
+          sChr = '\0';
+          buf[0] = c;
+        }
+        // Count up
+        len++;
+      }
+      else if (len == 1) {
+        // Second character in command buffer
+        if (sChr == 'A') {
+          // First character is capital 'A'
+          if (c == '/') {
+            // Second character is slash '/', repeat the
+            // previous command, but first check its length
+            if (strlen(buf) > 0) {
+              // Send the newline
+              printCRLF();
+              // Print the buffer again
+              Serial.print(buf);
+              // Send the newline
+              printCRLF();
+              // Parse the line
+              doCommand();
+              // Print the command response
+              printResult(cmdResult);
+            }
+            else {
+              // No previous command
+              cmdResult = RC_ERROR;
+              printResult(cmdResult);
+            }
+            // Reset the buffer length
+            len = 0;
+          }
+          else {
+            // Second character is not slash, may be 'T', go to buffer
+            buf[0] = sChr;
+            buf[1] = c;
+            len++;
+            sChr = '\0';
+          }
+        }
+        else {
+          // Not starting with 'A', put into buffer, length up
+          buf[len++] = c;
+        }
+      }
+      else {
+        // Append to buffer all characters starting with the third
         buf[len++] = c;
+      }
+
       // Check for EOL
       if (c == '\r' or c == '\n') {
         // Flush the rest
@@ -378,7 +433,7 @@ uint8_t HAYES::doSIO() {
         // Make sure the last char is null
         buf[--len] = '\0';
         // Check the line length before processing
-        if (len > 0) {
+        if (strlen(buf) > 0) {
           // Parse the line
           doCommand();
           // Print the command response
@@ -405,10 +460,10 @@ void HAYES::doCommand() {
     // Jump over those two chars from the start
     idx = pch - buf + 2;
     // New line, just "AT"
-    if (len <= 2)
+    if (strlen(buf) <= 2)
       cmdResult = RC_OK;
     // Process the line
-    while (idx < len) {
+    while (idx < strlen(buf)) {
       this->dispatch();
       if (cmdResult == RC_ERROR)
         break;
