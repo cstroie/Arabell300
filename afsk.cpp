@@ -733,16 +733,17 @@ bool AFSK::checkCarrier() {
     rx.carrier = OFF;
     cdCount = 0;
     // Check the carrier for at most S7 seconds
-    uint32_t timeout = millis() + cfg->sregs[7] * 1000;
+    uint32_t timeout = millis() + cfg->sregs[7] * 1000UL;
     while (millis() < timeout)
-      // Stop answering if there is any char on serial
+      // Stop checking if there is any char on serial
+      // or the carrier has been detected
       if (Serial.available() or rx.carrier == ON)
         break;
   }
   // CD led on if carrier
   if (rx.carrier == ON)
     PORTB |= _BV(PORTB2);
-  // Return the carrier status
+  // Return the carrier status (only true/false)
   return rx.carrier;
 }
 
