@@ -754,10 +754,10 @@ void HAYES::dispatch() {
     case 'Z':
       // No more response messages
       cmdResult = RC_NONE;
-      //FIXME wdt_enable(WDTO_2S);
+      wdt_enable(WDTO_2S);
       // Wait for the prescaller time to expire
       // without sending the reset signal
-      //FIXME while (true) {};
+      while (true) {};
       break;
 
     // Standard '&' extension
