@@ -30,7 +30,7 @@ WAVE wave;
 DTMF dtmf;
 
 // FIFOs
-const uint8_t fifoSize = 6;
+const uint8_t fifoSize = 4;
 const uint8_t fifoLow =  1 << (fifoSize - 2);
 const uint8_t fifoMed =  1 << (fifoSize - 1);
 const uint8_t fifoHgh = (1 << fifoSize) - fifoLow;
@@ -153,8 +153,11 @@ void AFSK::initHW() {
     delay(1);
   }
 
-  // Configure the leds: RX PB0(8), TX PB1(9), CD PB2(10)
-  DDRB |= _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0);
+  // Configure the leds: RX PB0(8), TX PB1(9), CD PB2(10), OH PB4(12)
+  DDRB |= _BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0);
+  // Configure RTS/CTS
+  DDRD |=   _BV(PORTD7);
+  DDRD &= ~(_BV(PORTD6));
 }
 
 /**
@@ -498,9 +501,15 @@ void AFSK::rxDecoder(uint8_t bt) {
             // Check the average level of decoded samples: at least half
             // of them must be HIGH, the bitsum must be more than qrtBit
             // (remember we have only the first half of the stop bit)
-            if (rx.bitsum > qrtBit)
+            if (rx.bitsum > qrtBit) {
               // Push the data into FIFO
               rxFIFO.in(rx.data);
+              // Keep the timestamp for carrier persistance
+
+            }
+            else {
+              // Check the last time we saw valid data and hangup
+            }
 #ifdef DEBUG_RX
             rxFIFO.in(10);
 #endif
@@ -608,7 +617,7 @@ bool AFSK::doSIO() {
         Serial.write(0x13);
       else if (cfg->flwctr = 3)
         // RTS/CTS flow control
-        PORTB &= ~_BV(PORTB2);
+        PORTD &= ~_BV(PORTD7);
       flowControl = true;
     }
 
@@ -619,7 +628,7 @@ bool AFSK::doSIO() {
         Serial.write(0x11);
       else if (cfg->flwctr = 3)
         // RTS/CTS flow control
-        PORTB |= _BV(PORTB2);
+        PORTD |= _BV(PORTD7);
       flowControl = false;
     }
 
@@ -691,8 +700,18 @@ void AFSK::setLine(uint8_t online) {
   _online = online;
 
   if (online == OFF) {
+    // OH led off
+    PORTB &= ~_BV(PORTB4);
+    // CD off
+    rx.carrier = OFF;
+    // CD led off
+    PORTB &= ~_BV(PORTB2);
     // Command mode
     this->setMode(COMMAND_MODE);
+  }
+  else {
+    // OH led on
+    PORTB |= _BV(PORTB4);
   }
 }
 
