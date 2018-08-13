@@ -60,6 +60,7 @@ class HAYES {
 
     void printCRLF();
     void print_P(const char *str, bool newline = false);
+    void banner();
 
     int16_t getInteger(char* buf, int8_t idx, uint8_t len = 32);
     int16_t getValidInteger(char* buf, uint8_t idx, int16_t low, int16_t hgh, int16_t def = 0, uint8_t len = 32);

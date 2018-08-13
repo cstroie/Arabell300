@@ -53,6 +53,17 @@ void HAYES::print_P(const char *str, bool newline) {
 }
 
 /**
+  Print the startup banner
+*/
+void HAYES::banner() {
+  printCRLF();
+  print_P(DEVNAME);
+  Serial.write(' ');
+  print_P(VERSION);
+  printCRLF();
+}
+
+/**
   Parse the buffer and return an integer
 
   @param buf the char buffer to parse
@@ -754,7 +765,7 @@ void HAYES::dispatch() {
     case 'Z':
       // No more response messages
       cmdResult = RC_NONE;
-      wdt_enable(WDTO_2S);
+      wdt_enable(WDTO_250MS);
       // Wait for the prescaller time to expire
       // without sending the reset signal
       while (true) {};

@@ -18,6 +18,7 @@
 */
 
 //#define DEBUG
+//#define DEBUG_EE
 
 #include <util/atomic.h>
 
@@ -50,11 +51,18 @@ ISR(ADC_vect) {
 */
 void setup() {
   // Serial port configuration
-  // We really should use 300 baud...
+#ifndef DEBUG_EE
   Serial.begin(300);
+#else
+  Serial.begin(115200);
+  e2hex();
+#endif
 
   // Define and configure the modem
   afsk.init(BELL103, &cfg);
+
+  // Banner
+  hayes.banner();
 }
 
 /**
@@ -78,3 +86,45 @@ void loop() {
   afsk.simPrint();
 #endif
 }
+
+#ifdef DEBUG_EE
+void e2hex() {
+  char buf[16];
+  char val[4];
+  uint8_t data;
+  // Start with a new line
+  Serial.print("\r\n");
+  // All EEPROM bytes
+  for (uint16_t addr = 0; addr <= E2END;) {
+    // Init the buffer
+    memset(buf, 0, 16);
+    // Use the buffer to display the address
+    sprintf_P(buf, PSTR("%04X: "), addr);
+    Serial.print(buf);
+    // Iterate over bytes, 2 sets of 8 bytes
+    for (uint8_t set = 0; set < 2; set++) {
+      for (uint8_t byt = 0; byt < 8; byt++) {
+        // Read EEPROM
+        data = EEPROM.read(addr);
+        // Prepare and print the hex dump
+        sprintf_P(val, PSTR("%02X "), data);
+        Serial.print(val);
+        // Prepare the ASCII dump
+        if (data < 32 or data > 127)
+          data = '.';
+        buf[addr & 0x0F] = data;
+        // Increment the address
+        addr++;
+      }
+      // Print a separator
+      Serial.write(' ');
+    }
+    // Print the ASCII column
+    for (uint8_t idx = 0; idx < 16; idx++) {
+      Serial.write(buf[idx]);
+    }
+    // New line
+    Serial.print("\r\n");
+  }
+}
+#endif
