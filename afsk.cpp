@@ -167,6 +167,18 @@ void AFSK::initHW() {
 }
 
 /**
+  Test the leds
+
+  @param onoff set the leds on or off
+*/
+void AFSK::setLeds(uint8_t onoff) {
+  if (onoff)
+    PORTB |= (_BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0));
+  else
+    PORTB &= ~(_BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0));
+}
+
+/**
   Send the sample to the DAC
 
   @param sample the sample to output to DAC
@@ -215,6 +227,8 @@ void AFSK::txHandle() {
             tx.data   = txFIFO.out();
             tx.state  = PREAMBLE;
             tx.bits   = 0;
+            // TX led on
+            PORTB |= _BV(PORTB1);
           }
           else
             // No data in FIFO
@@ -279,7 +293,7 @@ void AFSK::txHandle() {
             tx.active = OFF;
             tx.state  = WAIT;
             // TX led off
-            PORTB    &= ~_BV(PORTB1);
+            PORTB &= ~(_BV(PORTB1));
           }
           else if (tx.bits == carBits and tx.carrier == OFF) {
             // After the last trail carrier bit, send nothing
@@ -448,18 +462,12 @@ void AFSK::rxDecoder(uint8_t bt) {
       if (rx.clk >= hlfBit) {
         // Check the average level of decoded samples: less than a quarter
         // of them may be HIGHs; the bitsum must be lesser than octBit
-        if (rx.bitsum > octBit) {
+        if (rx.bitsum > octBit)
           // Too many HIGH, this is not a start bit
           rx.state  = WAIT;
-          // RX led off
-          PORTB    &= ~_BV(PORTB0);
-        }
-        else {
+        else
           // Could be a start bit, keep on going and check again at the end
           rx.state  = START_BIT;
-          // RX led on
-          PORTB    |= _BV(PORTB0);
-        }
       }
       break;
 
@@ -481,8 +489,6 @@ void AFSK::rxDecoder(uint8_t bt) {
             if (rx.bitsum > qrtBit) {
               // Too many HIGHs, this is not a start bit
               rx.state  = WAIT;
-              // RX led off
-              PORTB    &= ~_BV(PORTB0);
             }
             else {
               // This is a start bit, go on to data bits
@@ -538,8 +544,6 @@ void AFSK::rxDecoder(uint8_t bt) {
 #endif
             // Start over again
             rx.state  = WAIT;
-            // RX led off
-            PORTB    &= ~_BV(PORTB0);
             break;
         }
       }
@@ -642,8 +646,6 @@ uint8_t AFSK::doSIO() {
         lstChar = now;
         // Keep transmitting
         tx.active = ON;
-        // TX led on
-        PORTB |= _BV(PORTB1);
       }
     }
     else if (not flowControl and cfg->flwctr != 0) {
@@ -672,9 +674,19 @@ uint8_t AFSK::doSIO() {
 
     // Check if there is any data in RX FIFO
     if (not rxFIFO.empty()) {
+      // RX led on
+      uint8_t port = PORTB;
+      if (not port & _BV(PORTB0))
+        PORTB = port | _BV(PORTB0);
       // Get the byte and send it to serial line
       c = rxFIFO.out();
       Serial.write(c);
+    }
+    else {
+      // RX led off
+      uint8_t port = PORTB;
+      if (port & _BV(PORTB0))
+        PORTB = port & ~(_BV(PORTB0));
     }
     // Data mode, say to hayes we have processed the data
     result = 254;

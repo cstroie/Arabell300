@@ -56,8 +56,14 @@ void setup() {
   // Define and configure the modem
   afsk.init(BELL103, &cfg);
 
+  // All LEDs on
+  afsk.setLeds(ON);
+
   // Banner
   hayes.banner();
+
+  // All LEDs off
+  afsk.setLeds(OFF);
 }
 
 /**

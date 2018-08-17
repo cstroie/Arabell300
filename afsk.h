@@ -125,6 +125,7 @@ class AFSK {
     bool getRxCarrier();
     bool dial(char *phone);
     void doTXRX();
+    void setLeds(uint8_t onoff);
     uint8_t doSIO();
 
     void simFeed();             // Simulation
