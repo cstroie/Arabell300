@@ -17,8 +17,9 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
   Many thanks to:
-    Kamal Mostafa   https://github.com/kamalmostafa/minimodem
-    Mark Qvist      https://github.com/markqvist/MicroModemGP
+    Kamal Mostafa    https://github.com/kamalmostafa/minimodem
+    Mark Qvist       https://github.com/markqvist/MicroModemGP
+    Francesco Sacchi https://github.com/develersrl/bertos/blob/master/bertos/net/afsk.c
 */
 
 #include "afsk.h"
@@ -107,9 +108,14 @@ void AFSK::initHW() {
   // Top set for F_SAMPLE
   ICR1 = ((F_CPU + F_COR) / F_SAMPLE) - 1;
 
-  // Vcc with external capacitor at AREF pin
   // ADC Left Adjust Result
+#ifdef AREF_EXT
+  // 3.3V at AREF pin with external capacitor
+  ADMUX = _BV(ADLAR);
+#else
+  // Vcc with external capacitor at AREF pin
   ADMUX = _BV(REFS0) | _BV(ADLAR);
+#endif
 
   // Analog input A0
   DDRC  &= ~_BV(0); // Port C Data Direction Register
@@ -195,6 +201,10 @@ void AFSK::txHandle() {
 
       // One bit finished, choose the next bit and TX state
       switch (tx.state) {
+        // Do nothing
+        case NOP:
+          break;
+
         // We have been offline, prepare the transmission
         case WAIT:
           // The carrier is MARK
@@ -348,8 +358,8 @@ void AFSK::rxHandle(uint8_t sample) {
   //  1200:  0.4470595850866754  0.10588082982664918
 
   rx.iirX[0] = rx.iirX[1];
-  rx.iirX[1] = ((dyFIFO.out() - 128) * ss) >> 2;
-  //rx.iirX[1] = ((dyFIFO.out() - 128) * ss) >> 3;
+  rx.iirX[1] = ((dyFIFO.out() - bias) * ss) >> 2;
+  //rx.iirX[1] = ((dyFIFO.out() - bias) * ss) >> 3;
   rx.iirY[0] = rx.iirY[1];
   rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
   //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + ((rx.iirY[0] >> 4) * 15); // *0.9
@@ -384,6 +394,10 @@ void AFSK::rxDecoder(uint8_t bt) {
 
   // Check the RX decoder state
   switch (rx.state) {
+    // Do nothing
+    case NOP:
+      break;
+
     // Detect the incoming carrier
     case CARRIER:
       // Check if the sample is valid
@@ -391,7 +405,7 @@ void AFSK::rxDecoder(uint8_t bt) {
         // Count the received samples
         if (++cdCount >= cdTotal) {
           // Reached the maximum, carrier is valid
-          rx.carrier = ON;
+          this->setRxCarrier(ON);
           // Wait for the first start bit
           rx.state = WAIT;
         }
@@ -399,6 +413,10 @@ void AFSK::rxDecoder(uint8_t bt) {
       else
         // Reset the counter
         cdCount = 0;
+      break;
+
+    // Carrier lost
+    case NO_CARRIER:
       break;
 
     // Check each sample for a HIGH->LOW transition
@@ -410,6 +428,17 @@ void AFSK::rxDecoder(uint8_t bt) {
         rx.state  = PREAMBLE;
         rx.clk    = 0;
         rx.bitsum = 0;
+      }
+      else if (rx.stream == 0xFF) {
+        // Carrier only, update the carrier loss timeout
+        cdTOut = millis() + cfg->sregs[10] * 100UL;
+      }
+      // Check for carrier timeout
+      if ((cfg->sregs[7] > 0) and (millis() > cdTOut)) {
+        // Disable the CD flag and led
+        this->setRxCarrier(OFF);
+        // Stay in NO_CARRIER until SIO moves it to NOP
+        rx.state = NO_CARRIER;
       }
       break;
 
@@ -501,15 +530,9 @@ void AFSK::rxDecoder(uint8_t bt) {
             // Check the average level of decoded samples: at least half
             // of them must be HIGH, the bitsum must be more than qrtBit
             // (remember we have only the first half of the stop bit)
-            if (rx.bitsum > qrtBit) {
+            if (rx.bitsum > qrtBit)
               // Push the data into FIFO
               rxFIFO.in(rx.data);
-              // Keep the timestamp for carrier persistance
-
-            }
-            else {
-              // Check the last time we saw valid data and hangup
-            }
 #ifdef DEBUG_RX
             rxFIFO.in(10);
 #endif
@@ -527,9 +550,11 @@ void AFSK::rxDecoder(uint8_t bt) {
   Check the serial I/O and transmit the data, respectively check
   the received data and send it to the serial port.
 */
-bool AFSK::doSIO() {
+uint8_t AFSK::doSIO() {
   // The charcter on the serial line
   uint8_t c;
+  // The result (if unchanged, it's command mode, hayes will process)
+  uint8_t result = 255;
   // The escape characters counters
   static uint8_t  escCount = 0;
   static uint32_t escFirst = 0;
@@ -548,9 +573,10 @@ bool AFSK::doSIO() {
     // Check for the guard silence (S12)
     if (now - escLast > cfg->sregs[12] * 20) {
       // This is it, go in command mode
-      this->setMode(COMMAND_MODE);
       escCount = 0;
-      Serial.print("\r\nOK\r\n");
+      this->setMode(COMMAND_MODE);
+      // RC_OK
+      result = 0;
     }
     else if (available) {
       // We saw the string recently, check if there is any
@@ -590,6 +616,16 @@ bool AFSK::doSIO() {
     }
   }
 
+  // Check RX carrier
+  if (rx.state == NO_CARRIER) {
+    // The RX carrier has been lost, disable RX
+    rx.state = NOP;
+    // Go in command mode
+    this->setMode(COMMAND_MODE);
+    // RC_NO_CARRIER
+    result = 3;
+  }
+
   // Only in data mode
   if (this->_mode != COMMAND_MODE) {
     // Check if the FIFO is not getting full
@@ -612,23 +648,25 @@ bool AFSK::doSIO() {
     }
     else if (not flowControl and cfg->flwctr != 0) {
       // FIFO is getting full, check the flow control
-      if (cfg->flwctr = 4)
+      if (cfg->flwctr == 4)
         // XON/XOFF flow control: XOFF
         Serial.write(0x13);
-      else if (cfg->flwctr = 3)
+      else if (cfg->flwctr == 3)
         // RTS/CTS flow control
         PORTD &= ~_BV(PORTD7);
+      // Stop flow
       flowControl = true;
     }
 
     // Anytime, try to disable flow control, if we can
     if (flowControl and txFIFO.len() < fifoLow) {
-      if (cfg->flwctr = 4)
+      if (cfg->flwctr == 4)
         // XON/XOFF flow control: XON
         Serial.write(0x11);
-      else if (cfg->flwctr = 3)
+      else if (cfg->flwctr == 3)
         // RTS/CTS flow control
         PORTD |= _BV(PORTD7);
+      // Resume flow
       flowControl = false;
     }
 
@@ -638,16 +676,16 @@ bool AFSK::doSIO() {
       c = rxFIFO.out();
       Serial.write(c);
     }
-    // Return true, to let the caller know we have processed the data
-    return true;
+    // Data mode, say to hayes we have processed the data
+    result = 254;
   }
-  else
-    // We have not processed the data
-    return false;
+
+  // Return the result (for hayes.doSIO, to print it)
+  return result;
 }
 
 /**
-  Handle both the TX and RX, if in data mode
+  Handle both the TX and RX
 */
 void AFSK::doTXRX() {
   static uint8_t analog;
@@ -669,8 +707,8 @@ void AFSK::doTXRX() {
 void AFSK::setDirection(uint8_t dir, uint8_t rev) {
   // Keep the direction
   _dir = dir;
-  // Stop the carrier
-  this->setCarrier(OFF);
+  // Stop the TX carrier
+  this->setTxCarrier(OFF);
   // Create TX/RX pointers to ORIGINATING/ANSWERING parameters
   if ((_dir == ORIGINATING and rev == OFF) or
       (_dir == ANSWERING and cfg->revans == ON)) {
@@ -703,9 +741,7 @@ void AFSK::setLine(uint8_t online) {
     // OH led off
     PORTB &= ~_BV(PORTB4);
     // CD off
-    rx.carrier = OFF;
-    // CD led off
-    PORTB &= ~_BV(PORTB2);
+    this->setRxCarrier(OFF);
     // Command mode
     this->setMode(COMMAND_MODE);
   }
@@ -726,12 +762,27 @@ void AFSK::setMode(uint8_t mode) {
 }
 
 /**
-  Enable or disable the carrier going at runtime
+  Enable or disable the TX carrier going at runtime
 
   @param onoff carrier mode
 */
-void AFSK::setCarrier(uint8_t onoff) {
+void AFSK::setTxCarrier(uint8_t onoff) {
   tx.carrier = onoff & cfg->txcarr;
+}
+
+/**
+  Signal the RX carrier detection
+
+  @param onoff carrier mode
+*/
+void AFSK::setRxCarrier(uint8_t onoff) {
+  rx.carrier = onoff;
+  if (onoff == ON)
+    // CD led on
+    PORTB |= _BV(PORTB2);
+  else
+    // CD led off
+    PORTB &= ~_BV(PORTB2);
 }
 
 /**
@@ -739,29 +790,30 @@ void AFSK::setCarrier(uint8_t onoff) {
 
   @return the carrier detection status
 */
-bool AFSK::checkCarrier() {
-  // CD led off
-  PORTB &= ~_BV(PORTB2);
+bool AFSK::getRxCarrier() {
   // If the value specified in S7 is zero, don't wait
   // for the carrier, report as found
-  if (cfg->sregs[7] == 0)
-    rx.carrier = ON;
+  if (cfg->sregs[7] == 0) {
+    // Don't detect the carrier, go directly to WAIT
+    this->setRxCarrier(ON);
+    rx.state = WAIT;
+  }
   else {
     // Use the decoder to check for carrier
+    this->setRxCarrier(OFF);
     rx.state = CARRIER;
-    rx.carrier = OFF;
     cdCount = 0;
     // Check the carrier for at most S7 seconds
-    uint32_t timeout = millis() + cfg->sregs[7] * 1000UL;
-    while (millis() < timeout)
+    cdTOut = millis() + cfg->sregs[7] * 1000UL;
+    while (millis() <= cdTOut)
       // Stop checking if there is any char on serial
       // or the carrier has been detected
       if (Serial.available() or rx.carrier == ON)
         break;
+    // No RX if carrier not detected
+    if (not rx.carrier)
+      rx.state = NOP;
   }
-  // CD led on if carrier
-  if (rx.carrier == ON)
-    PORTB |= _BV(PORTB2);
   // Return the carrier status (only true/false)
   return rx.carrier;
 }
@@ -774,8 +826,8 @@ bool AFSK::checkCarrier() {
 */
 bool AFSK::dial(char *phone) {
   bool result = true;
-  // Disable the carrier
-  this->setCarrier(OFF);
+  // Disable the TX carrier
+  this->setTxCarrier(OFF);
   // Sanitize S8 and set the comma delay value
   if (cfg->sregs[8] > 6)
     cfg->sregs[8] = 2;

@@ -361,8 +361,16 @@ void HAYES::showProfile(CFG_t *conf) {
   Process serial I/O in command mode: read the chars into a buffer,
   check them, echo them (uppercase), run commands and print results
 */
-uint8_t HAYES::doSIO() {
+uint8_t HAYES::doSIO(uint8_t rcRemote) {
   char c;
+  // Check if we just have to print a result
+  if (rcRemote != RC_NONE) {
+    // Just print the remote result
+    printResult(rcRemote);
+    // Bail out
+    return;
+  }
+
   // Read from serial only if there is room in buffer
   if (len < MAX_INPUT_SIZE - 1) {
     c = Serial.read();
@@ -520,9 +528,9 @@ void HAYES::dispatch() {
       // Phase 2: Go online
       afskModem->setLine(ON);
       // Phase 2: Answering carrier on (after a while)
-      afskModem->setCarrier(ON);
+      afskModem->setTxCarrier(ON);
       // Phase 3: Wait for originating carrier for S7 seconds
-      if (afskModem->checkCarrier()) {
+      if (afskModem->getRxCarrier()) {
         // Phase 4: Data mode if carrier found
         afskModem->setMode(DATA_MODE);
         cmdResult = RC_CONNECT;
@@ -562,7 +570,7 @@ void HAYES::dispatch() {
         cmdPrint(cfg->txcarr);
       else {
         cfg->txcarr = getValidDigit(0, 1, cfg->txcarr);
-        afskModem->setCarrier(ON);
+        afskModem->setTxCarrier(ON);
       }
       break;
 
@@ -579,9 +587,9 @@ void HAYES::dispatch() {
         // Phase 5: Dial: DTMF/Pulses
         if (afskModem->dial(dialNumber)) {
           // Phase 6: Wait for incoming carrier for S7 seconds
-          if (afskModem->checkCarrier()) {
+          if (afskModem->getRxCarrier()) {
             // Phase 7: Enable outgoing carrier
-            afskModem->setCarrier(ON);
+            afskModem->setTxCarrier(ON);
             // Phase 8: Enter data mode or stay in command mode
             if (dialCmdMode)
               cmdResult = RC_OK;

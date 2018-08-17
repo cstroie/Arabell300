@@ -71,7 +71,7 @@ class HAYES {
     int8_t  getValidDigit(int8_t low, int8_t hgh, int8_t def = HAYES_NUM_ERROR);
 
 
-    uint8_t doSIO();
+    uint8_t doSIO(uint8_t rcRemote = RC_NONE);
     void    doCommand();
     void    dispatch();
 

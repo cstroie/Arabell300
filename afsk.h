@@ -36,7 +36,7 @@
 // Mark and space bits
 enum BIT {SPACE, MARK};
 // States in RX and TX finite states machines
-enum TXRX_STATE {WAIT, PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, CARRIER};
+enum TXRX_STATE {WAIT, PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, CARRIER, NO_CARRIER, NOP};
 // Connection direction
 enum DIRECTION {ORIGINATING, ANSWERING};
 // Command and data mode
@@ -46,7 +46,7 @@ enum ONOFF {OFF, ON};
 
 // Transmission related data
 struct TX_t {
-  uint8_t active  = 0;        // currently transmitting or not
+  uint8_t active  = 0;        // currently transmitting something or not
   uint8_t state   = WAIT;     // TX state (TXRX_STATE enum)
   uint8_t dtbit   = MARK;     // currently transmitting data bit
   uint8_t data    = 0;        // transmitting data bits, shift out, LSB first
@@ -58,7 +58,7 @@ struct TX_t {
 
 // Receiving and decoding related data
 struct RX_t {
-  uint8_t active  = 0;        // currently receiving proper signals or not
+  uint8_t active  = 0;        // currently receiving something or not
   uint8_t state   = WAIT;     // RX decoder state (TXRX_STATE enum)
   uint8_t data    = 0;        // the received data bits, shift in, LSB first
   uint8_t bits    = 0;        // counter of received data bits
@@ -120,11 +120,12 @@ class AFSK {
     void setDirection(uint8_t dir, uint8_t rev = OFF);
     void setLine(uint8_t online);
     void setMode(uint8_t mode);
-    void setCarrier(uint8_t onoff);
-    bool checkCarrier();
+    void setTxCarrier(uint8_t onoff);
+    void setRxCarrier(uint8_t onoff);
+    bool getRxCarrier();
     bool dial(char *phone);
     void doTXRX();
-    bool doSIO();
+    uint8_t doSIO();
 
     void simFeed();             // Simulation
     void simPrint();
@@ -133,7 +134,7 @@ class AFSK {
     AFSK_t  cfgAFSK;
     CFG_t  *cfg;
 
-    uint8_t _online   = OFF;     // OnHook / OffHook
+    uint8_t _online   = OFF;            // OnHook / OffHook
     uint8_t _mode     = COMMAND_MODE;   // Modem works in data mode or in command mode
     uint8_t _dir      = ORIGINATING;
     uint8_t _dialing  = OFF;
@@ -147,6 +148,7 @@ class AFSK {
     // Carrier detect counter and threshold
     uint32_t cdCount; // samples counter
     uint32_t cdTotal; // total samples to count
+    uint32_t cdTOut;  // carrier timeout
 
     // Serial flow control tracking status
     bool flowControl = false;
