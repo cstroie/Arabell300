@@ -20,19 +20,18 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// CPU frequency correction for sampling timer
-#define F_COR (-120000L)
+#include <Arduino.h>
+#include <EEPROM.h>
+
+// Include local configuration
+#include "local.h"
 
 // Sampling frequency
 #define F_SAMPLE    9600
 
-#include <Arduino.h>
-#include <EEPROM.h>
-
-
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Arabell300";
-const char VERSION[]  PROGMEM = "v2.38";
+const char VERSION[]  PROGMEM = "v3.39";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DESCRP[]   PROGMEM = "Arduino based Bell 103 and ITU V.21 AFSK modem";
 const char FTRS[]     PROGMEM = "a0000400080004000\r\nb000008\r\nr1001000000000000";

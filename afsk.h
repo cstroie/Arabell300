@@ -27,9 +27,6 @@
 //#define DEBUG_RX
 //#define DEBUG_RX_LVL
 
-// The PWM pin may be 3 or 11 (Timer2)
-#define PWM_PIN 3
-
 #include <Arduino.h>
 #include "config.h"
 #include "fifo.h"

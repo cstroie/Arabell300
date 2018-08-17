@@ -17,11 +17,6 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-//#define DEBUG
-//#define DEBUG_EE
-
-#include <util/atomic.h>
-
 #include "config.h"
 #include "afsk.h"
 #include "hayes.h"
@@ -51,11 +46,11 @@ ISR(ADC_vect) {
 */
 void setup() {
   // Serial port configuration
-#ifndef DEBUG_EE
-  Serial.begin(300);
-#else
+#ifdef DEBUG_EE
   Serial.begin(115200);
   e2hex();
+#else
+  Serial.begin(300);
 #endif
 
   // Define and configure the modem
@@ -77,7 +72,7 @@ void loop() {
   static uint32_t next = millis();
   if (millis() > next) {
     Serial.println(afsk.inLevel);
-    next += 8 * 1000 / BAUD;
+    next += 8 * 1000 / 300;
   }
 #endif
 
