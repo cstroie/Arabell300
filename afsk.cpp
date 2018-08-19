@@ -136,7 +136,7 @@ void AFSK::initHW() {
 #if PWM_PIN == 11
   // Configure the PWM PIN 11 (PB3)
   PORTB &= ~(_BV(PORTB3));
-  DDRD  |= _BV(PORTD3);
+  DDRB  |= _BV(PORTB3);
   // Do non-inverting PWM on pin OC2A (p.155)
   TCCR2A = (TCCR2A | _BV(COM2A1)) & ~_BV(COM2A0);
   TCCR2A &= ~(_BV(COM2B1) | _BV(COM2B0));
