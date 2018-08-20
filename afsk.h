@@ -161,11 +161,16 @@ class AFSK {
     AFSK_FSQ_t *fsqTX;
     AFSK_FSQ_t *fsqRX;
 
-    inline void DAC(uint8_t sample);
+    uint8_t rxSample;
+    uint8_t txSample;
+
+    inline void DAC_A(uint8_t sample);
+    inline void DAC_B(uint8_t sample);
     void initHW();
     void txHandle();
     void rxHandle(uint8_t sample);
     void rxDecoder(uint8_t bt);
+    void spkHandle();
 
 #ifdef DEBUG_RX_LVL
     // Count input samples and get the minimum, maximum and input level

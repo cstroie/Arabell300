@@ -133,29 +133,21 @@ void AFSK::initHW() {
   TCCR2A  |= _BV(WGM21)   | _BV(WGM20); // Set fast PWM mode  (p.157)
   TCCR2B  &= ~_BV(WGM22);
 
-#if PWM_PIN == 11
   // Configure the PWM PIN 11 (PB3)
   PORTB &= ~(_BV(PORTB3));
   DDRB  |= _BV(PORTB3);
-  // Do non-inverting PWM on pin OC2A (p.155)
-  TCCR2A = (TCCR2A | _BV(COM2A1)) & ~_BV(COM2A0);
-  TCCR2A &= ~(_BV(COM2B1) | _BV(COM2B0));
-  // No prescaler (p.158)
-  TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
-#else
   // Configure the PWM PIN 3 (PD3)
   PORTD &= ~(_BV(PORTD3));
   DDRD  |= _BV(PORTD3);
-  // Do non-inverting PWM on pin OC2B (p.155)
-  TCCR2A = (TCCR2A | _BV(COM2B1)) & ~_BV(COM2B0);
-  TCCR2A &= ~(_BV(COM2A1) | _BV(COM2A0));
+  // Do non-inverting PWM on pin OC2A and OC2B (p.155)
+  TCCR2A = (TCCR2A | _BV(COM2A1) | _BV(COM2B1)) & (~_BV(COM2A0) | ~_BV(COM2B0));
   // No prescaler (p.158)
   TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
-#endif
 
   // Set initial pulse width to the first sample, progresively
   for (uint8_t i = 0; i <= wave.sample(0); i++) {
-    DAC(i);
+    DAC_A(i);
+    DAC_B(i);
     delay(1);
   }
 
@@ -183,13 +175,27 @@ void AFSK::setLeds(uint8_t onoff) {
 
   @param sample the sample to output to DAC
 */
-inline void AFSK::DAC(uint8_t sample) {
+inline void AFSK::DAC_A(uint8_t sample) {
 #if PWM_PIN == 11
   OCR2A = sample;
 #else
   OCR2B = sample;
 #endif
 }
+
+/**
+  Send the sample to the DAC
+
+  @param sample the sample to output to DAC
+*/
+inline void AFSK::DAC_B(uint8_t sample) {
+#if PWM_PIN == 11
+  OCR2B = sample;
+#else
+  OCR2A = sample;
+#endif
+}
+
 
 /**
   TX workhorse.  This function is called by ISR for each output sample.
@@ -200,9 +206,9 @@ void AFSK::txHandle() {
   // Check if we are transmitting
   if (tx.active == ON or tx.carrier == ON) {
     // First thing first: get the sample
-    uint8_t sample = wave.sample(tx.idx);
+    txSample = wave.sample(tx.idx);
     // Output the sample
-    DAC(sample);
+    DAC_A(txSample);
     // Step up the index for the next sample
     tx.idx += fsqTX->step[tx.dtbit];
 
@@ -325,9 +331,11 @@ void AFSK::txHandle() {
         _commaCnt = 0;
       }
     }
-    else if (dtmf.getSample())
+    else if (dtmf.getSample()) {
       // Get the DTMF sample and send to DAC
-      DAC(dtmf.sample);
+      txSample = dtmf.sample;
+      DAC_A(txSample);
+    }
     else if (not txFIFO.empty()) {
       // Check the FIFO for dial numbers
       dialChar = txFIFO.out();
@@ -700,14 +708,38 @@ uint8_t AFSK::doSIO() {
   Handle both the TX and RX
 */
 void AFSK::doTXRX() {
-  static uint8_t analog;
+  // Get the sample first
+  rxSample = ADCH;
   if (this->_online) {
-    // Get the sample first
-    analog = ADCH;
     // Handle TX (constant delay)
     this->txHandle();
-    // Finally, handle RX
-    this->rxHandle(analog);
+    // Handle RX
+    this->rxHandle(rxSample);
+  }
+  // Handle the audio monitor
+  this->spkHandle();
+}
+
+/**
+  Handle the audio monitor (speaker)
+
+  @param txSample the TX sample
+  @param rxSample the RX sample
+*/
+void AFSK::spkHandle() {
+  switch (cfg->spkmod) {
+    case 1:
+      DAC_B(txSample >> (3 - cfg->spklvl));
+      break;
+    case 2:
+      DAC_B(rxSample >> (3 - cfg->spklvl));
+      break;
+    case 3:
+      DAC_B(txSample >> (4 - cfg->spklvl) +
+            rxSample >> (4 - cfg->spklvl));
+      break;
+    default:
+      break;
   }
 }
 

@@ -63,6 +63,7 @@ void setup() {
   hayes.banner();
 
   // All LEDs off
+  delay(1000);
   afsk.setLeds(OFF);
 }
 

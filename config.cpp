@@ -155,7 +155,7 @@ bool Profile::factory(CFG_t *cfg) {
   cfg->cmecho = 0x01; // ATE
   cfg->dtecho = 0x00; // ATF
   cfg->spklvl = 0x01; // ATL
-  cfg->spkmod = 0x01; // ATM
+  cfg->spkmod = 0x00; // ATM
   cfg->quiet  = 0x00; // ATQ
   cfg->verbal = 0x01; // ATV
   cfg->selcpm = 0x00; // ATX
