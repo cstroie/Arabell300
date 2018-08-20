@@ -505,6 +505,8 @@ void AFSK::rxDecoder(uint8_t bt) {
               rx.clk    = 0;
               rx.bitsum = 0;
               rx.bits   = 0;
+              // RX led on
+              PORTB |= _BV(PORTB0);
             }
             break;
 
@@ -552,6 +554,8 @@ void AFSK::rxDecoder(uint8_t bt) {
 #endif
             // Start over again
             rx.state  = WAIT;
+            // RX led off
+            PORTB &= ~(_BV(PORTB0));
             break;
         }
       }
@@ -682,19 +686,9 @@ uint8_t AFSK::doSIO() {
 
     // Check if there is any data in RX FIFO
     if (not rxFIFO.empty()) {
-      // RX led on
-      uint8_t port = PORTB;
-      if (not port & _BV(PORTB0))
-        PORTB = port | _BV(PORTB0);
       // Get the byte and send it to serial line
       c = rxFIFO.out();
       Serial.write(c);
-    }
-    else {
-      // RX led off
-      uint8_t port = PORTB;
-      if (port & _BV(PORTB0))
-        PORTB = port & ~(_BV(PORTB0));
     }
     // Data mode, say to hayes we have processed the data
     result = 254;
