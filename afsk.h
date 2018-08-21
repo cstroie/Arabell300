@@ -119,6 +119,7 @@ class AFSK {
     void setModemType(AFSK_t afsk);
     void setDirection(uint8_t dir, uint8_t rev = OFF);
     void setLine(uint8_t online);
+    bool getLine();
     void setMode(uint8_t mode);
     void setTxCarrier(uint8_t onoff);
     void setRxCarrier(uint8_t onoff);
@@ -127,6 +128,7 @@ class AFSK {
     void doTXRX();
     void setLeds(uint8_t onoff);
     uint8_t doSIO();
+    uint32_t callTime();
 
     void simFeed();             // Simulation
     void simPrint();

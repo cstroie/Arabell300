@@ -62,6 +62,8 @@ class HAYES {
     void print_P(const char *str, bool newline = false);
     void banner();
 
+    void getUptime(uint32_t secs, char *buf, size_t len);
+
     int16_t getInteger(char* buf, int8_t idx, uint8_t len = 32);
     int16_t getValidInteger(char* buf, uint8_t idx, int16_t low, int16_t hgh, int16_t def = 0, uint8_t len = 32);
     int16_t getValidInteger(int16_t low, int16_t hgh, int16_t def = 0, uint8_t len = 32);
@@ -102,7 +104,7 @@ class HAYES {
     void    cmdPrint(char cmd, char mod, uint8_t value, bool newline = true);
     void    cmdPrint(uint8_t value);
     void    sregPrint(CFG_t *conf, uint8_t reg, bool newline = false);
-
+    void    printResult(uint8_t code, char* buf = NULL);
 
     uint8_t dialCmdMode = 0;
     uint8_t dialReverse = 0;
@@ -112,7 +114,6 @@ class HAYES {
 
     void    showProfile(CFG_t *conf);
 
-    void    printResult(uint8_t code);
 };
 
 #endif /* HAYES_H */

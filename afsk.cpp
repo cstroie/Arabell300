@@ -667,7 +667,6 @@ uint8_t AFSK::doSIO() {
     rx.state = NOP;
     // Go in command mode
     this->setMode(COMMAND_MODE);
-    // TODO Call duration is millis() - cdCount
     // RC_NO_CARRIER
     result = 3;
   }
@@ -804,6 +803,15 @@ void AFSK::setLine(uint8_t online) {
 }
 
 /**
+  Get the online status
+
+  @return online status
+*/
+bool AFSK::getLine() {
+  return this->onLine;
+}
+
+/**
   Set the modem mode
 
   @param mode command mode or data mode
@@ -905,6 +913,15 @@ bool AFSK::dial(char *phone) {
     delay(10);
   }
   return result;
+}
+
+/**
+  Get the call time
+
+  @return call duration in seconds
+*/
+uint32_t AFSK::callTime() {
+  return (millis() - cdCount) / 1000;
 }
 
 /**

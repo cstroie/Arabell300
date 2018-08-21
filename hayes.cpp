@@ -64,6 +64,27 @@ void HAYES::banner() {
 }
 
 /**
+  Get the uptime
+
+  @param upt the time in seconds
+  @param buf character array to return the text to
+  @param len the maximum length of the character array
+  @return uptime in seconds
+*/
+void HAYES::getUptime(uint32_t upt, char *buf, size_t len) {
+  // Compute days, hours, minutes and seconds
+  int ss =  upt % 60;
+  int mm = (upt % 3600) / 60;
+  int hh = (upt % 86400L) / 3600;
+  int dd =  upt / 86400L;
+  // Create the formatted time
+  if      (dd == 0) snprintf_P(buf, len, PSTR("%02d:%02d:%02d"),              hh, mm, ss);
+  else if (dd == 1) snprintf_P(buf, len, PSTR("%d day, %02d:%02d:%02d"),  dd, hh, mm, ss);
+  else              snprintf_P(buf, len, PSTR("%d days, %02d:%02d:%02d"), dd, hh, mm, ss);
+}
+
+
+/**
   Parse the buffer and return an integer
 
   @param buf the char buffer to parse
@@ -365,8 +386,15 @@ uint8_t HAYES::doSIO(uint8_t rcRemote) {
   char c;
   // Check if we just have to print a result
   if (rcRemote != RC_NONE) {
-    // Just print the remote result
-    printResult(rcRemote);
+    // If NO CARRIER, show the call time
+    if (rcRemote == RC_NO_CARRIER) {
+      char buf[20];
+      getUptime(afskModem->callTime(), buf, 20);
+      printResult(rcRemote, buf);
+    }
+    else
+      // Just print the remote result
+      printResult(rcRemote);
     // Bail out
     return;
   }
@@ -496,11 +524,16 @@ void HAYES::doCommand() {
 
   @param code the response code
 */
-void HAYES::printResult(uint8_t code) {
+void HAYES::printResult(uint8_t code, char* buf) {
   if (code != RC_NONE and cfg->quiet != 1)
     if (cfg->verbal) {
       printCRLF();
-      print_P(rcMsg[code], true);
+      print_P(rcMsg[code]);
+      if (buf != NULL) {
+        Serial.write(' ');
+        Serial.print(buf);
+      }
+      printCRLF();
     }
     else {
       Serial.print(code);
@@ -632,6 +665,11 @@ void HAYES::dispatch() {
     // ATH Hook control
     case 'H':
       afskModem->setLine(getValidDigit(0, 1, 0));
+      if (not afskModem->getLine()) {
+        char buf[20];
+        getUptime(afskModem->callTime(), buf, 20);
+        printResult(RC_NO_CARRIER, buf);
+      }
       break;
 
     // ATI Show info
