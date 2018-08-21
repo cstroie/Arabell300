@@ -84,6 +84,14 @@ void AFSK::setModemType(AFSK_t afsk) {
   // Compute CarrierDetect threshold
   cdTotal = F_SAMPLE / 10 * cfg->sregs[9];
   cdTotal = cdTotal - (cdTotal >> 4);
+  // Compute the ADC bias
+  uint16_t sum = 0;
+  for (uint16_t i = 0; i <= 255; i++) {
+    while (bit_is_set(ADCSRA, ADSC));
+    sum += ADCH;
+  }
+  // Keep the bias as an average of the 256 samples
+  this->bias = sum >> 8;
 }
 
 /**
@@ -171,6 +179,22 @@ void AFSK::setLeds(uint8_t onoff) {
     PORTB |= (_BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0));
   else
     PORTB &= ~(_BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0));
+}
+
+/**
+  Handle both the TX and RX
+*/
+void AFSK::doTXRX() {
+  // Get the sample first
+  rxSample = ADCH;
+  if (this->_online) {
+    // Handle TX (constant delay)
+    this->txHandle();
+    // Handle RX
+    this->rxHandle(rxSample);
+  }
+  // Handle the audio monitor
+  this->spkHandle();
 }
 
 /**
@@ -702,22 +726,6 @@ uint8_t AFSK::doSIO() {
 
   // Return the result (for hayes.doSIO, to print it)
   return result;
-}
-
-/**
-  Handle both the TX and RX
-*/
-void AFSK::doTXRX() {
-  // Get the sample first
-  rxSample = ADCH;
-  if (this->_online) {
-    // Handle TX (constant delay)
-    this->txHandle();
-    // Handle RX
-    this->rxHandle(rxSample);
-  }
-  // Handle the audio monitor
-  this->spkHandle();
 }
 
 /**
