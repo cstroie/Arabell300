@@ -102,6 +102,9 @@ void AFSK::initSteps() {
   Initialize the hardware
 */
 void AFSK::initHW() {
+  //Disable interrupts
+  cli();
+
   // TC1 Control Register B: No prescaling, WGM mode 12
   TCCR1A = 0;
   TCCR1B = _BV(CS10) | _BV(WGM13) | _BV(WGM12);
@@ -144,18 +147,18 @@ void AFSK::initHW() {
   // No prescaler (p.158)
   TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
 
-  // Set initial pulse width to the first sample, progresively
-  for (uint8_t i = 0; i <= wave.sample(0); i++) {
-    DAC_A(i);
-    DAC_B(i);
-    delay(1);
-  }
-
   // Configure the leds: RX PB0(8), TX PB1(9), CD PB2(10), OH PB4(12)
   DDRB |= _BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0);
   // Configure RTS/CTS
   DDRD |=   _BV(PORTD7);
   DDRD &= ~(_BV(PORTD6));
+
+  // Set initial PWM to the first sample
+  DAC_A(wave.sample(0));
+  DAC_B(wave.sample(0));
+
+  // Enable interrupts
+  sei();
 }
 
 /**
