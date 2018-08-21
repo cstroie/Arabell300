@@ -26,6 +26,15 @@
 #include "config.h"
 #include "wave.h"
 
+
+//     DTMF frequencies
+//
+//      1209 1336 1477 1633
+//  697    1    2    3    A
+//  770    4    5    6    B
+//  852    7    8    9    C
+//  941    *    0    #    D
+
 static const uint16_t frqRows[ROWSCOLS] = { 697,  770,  852,  941};
 static const uint16_t frqCols[ROWSCOLS] = {1209, 1336, 1477, 1633};
 
