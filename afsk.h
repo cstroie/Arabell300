@@ -147,9 +147,9 @@ class AFSK {
     uint8_t fulBit, hlfBit, qrtBit, octBit;
 
     // Carrier detect counter and threshold
-    uint32_t cdCount; // samples counter
+    uint32_t cdCount; // samples counter and call timer
     uint32_t cdTotal; // total samples to count
-    uint32_t cdTOut;  // carrier timeout
+    uint32_t cdTOut;  // RX carrier timeout
 
     // Serial flow control tracking status
     bool flowControl = false;

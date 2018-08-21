@@ -431,6 +431,8 @@ void AFSK::rxDecoder(uint8_t bt) {
         if (++cdCount >= cdTotal) {
           // Reached the maximum, carrier is valid
           this->setRxCarrier(ON);
+          // Reuse the counter as call timer
+          cdCount = millis();
           // Wait for the first start bit
           rx.state = WAIT;
         }
@@ -641,6 +643,7 @@ uint8_t AFSK::doSIO() {
     rx.state = NOP;
     // Go in command mode
     this->setMode(COMMAND_MODE);
+    // TODO Call duration is millis() - cdCount
     // RC_NO_CARRIER
     result = 3;
   }
