@@ -187,7 +187,7 @@ void AFSK::setLeds(uint8_t onoff) {
 void AFSK::doTXRX() {
   // Get the sample first
   rxSample = ADCH;
-  if (this->_online) {
+  if (this->onLine) {
     // Handle TX (constant delay)
     this->txHandle();
     // Handle RX
@@ -347,7 +347,7 @@ void AFSK::txHandle() {
     }
   }
   // Check if we are tone dialing
-  else if (_dialing) {
+  else if (this->isDialing) {
     // One time static
     static char dialChar = '\0';
     // Check each dial character
@@ -371,7 +371,7 @@ void AFSK::txHandle() {
     }
     else
       // Stop dialing
-      _dialing = OFF;
+      this->isDialing = OFF;
   }
 }
 
@@ -673,7 +673,7 @@ uint8_t AFSK::doSIO() {
   }
 
   // Only in data mode
-  if (this->_mode != COMMAND_MODE) {
+  if (this->opMode != COMMAND_MODE) {
     // Check if the FIFO is not getting full
     if (txFIFO.len() < fifoHgh) {
       // Check if we can take the byte
@@ -758,12 +758,12 @@ void AFSK::spkHandle() {
 */
 void AFSK::setDirection(uint8_t dir, uint8_t rev) {
   // Keep the direction
-  _dir = dir;
+  direction = dir;
   // Stop the TX carrier
   this->setTxCarrier(OFF);
   // Create TX/RX pointers to ORIGINATING/ANSWERING parameters
-  if ((_dir == ORIGINATING and rev == OFF) or
-      (_dir == ANSWERING and cfg->revans == ON)) {
+  if ((direction == ORIGINATING and rev == OFF) or
+      (direction == ANSWERING and cfg->revans == ON)) {
     fsqTX = &cfgAFSK.orig;
     fsqRX = &cfgAFSK.answ;
   }
@@ -787,7 +787,7 @@ void AFSK::setDirection(uint8_t dir, uint8_t rev) {
 */
 void AFSK::setLine(uint8_t online) {
   // Keep the online status
-  _online = online;
+  onLine = online;
 
   if (online == OFF) {
     // OH led off
@@ -810,7 +810,7 @@ void AFSK::setLine(uint8_t online) {
 */
 void AFSK::setMode(uint8_t mode) {
   // Keep the mode
-  this->_mode = mode;
+  this->opMode = mode;
 }
 
 /**
@@ -893,12 +893,12 @@ bool AFSK::dial(char *phone) {
     txFIFO.in(*phone++);
   txFIFO.in(',');
   // Start dialing
-  _dialing = ON;
+  this->isDialing = ON;
   // Block until dialing is over
-  while (_dialing == ON) {
+  while (this->isDialing == ON) {
     // Stop dialing if there is any char on serial
     if (Serial.available()) {
-      _dialing = OFF;
+      this->isDialing = OFF;
       result = false;
     }
     // Busy delay

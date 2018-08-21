@@ -135,10 +135,10 @@ class AFSK {
     AFSK_t  cfgAFSK;
     CFG_t  *cfg;
 
-    uint8_t _online   = OFF;            // OnHook / OffHook
-    uint8_t _mode     = COMMAND_MODE;   // Modem works in data mode or in command mode
-    uint8_t _dir      = ORIGINATING;
-    uint8_t _dialing  = OFF;
+    uint8_t onLine    = OFF;            // OnHook / OffHook
+    uint8_t opMode    = COMMAND_MODE;   // Modem works in data mode or in command mode
+    uint8_t direction = ORIGINATING;
+    uint8_t isDialing = OFF;
 
     uint16_t _commaCnt;
     uint16_t _commaMax;
