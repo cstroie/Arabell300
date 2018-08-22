@@ -60,6 +60,9 @@ void HAYES::banner() {
   print_P(DEVNAME);
   Serial.write(' ');
   print_P(VERSION);
+  Serial.print(" (");
+  print_P(DATE);
+  Serial.print(")");
   printCRLF();
 }
 
@@ -581,6 +584,8 @@ void HAYES::dispatch() {
       break;
 
     // ATB Select Communication Protocol
+    // ATB15  set ITU V.21 modem type
+    // ATB16  set Bell103 modem type
     case 'B':
       if (buf[idx] == '?')
         cmdPrint(cfg->compro);
@@ -601,6 +606,8 @@ void HAYES::dispatch() {
       break;
 
     // ATC Transmit carrier
+    // ATC0  disable running TX carrier
+    // ATC1  enable running TX carrier
     case 'C':
       if (buf[idx] == '?')
         cmdPrint(cfg->txcarr);
@@ -611,6 +618,10 @@ void HAYES::dispatch() {
       break;
 
     // ATD Call
+    // ATDxnnn
+    //    T     tone dialing
+    //    P     pulse dialing
+    //     nnn  phone number
     case 'D':
       cmdResult = RC_ERROR;
       // Phase 1: Get the dial number and parameters
@@ -653,6 +664,8 @@ void HAYES::dispatch() {
       break;
 
     // ATE Set local command mode echo
+    // ATE0  disable local character echo in command mode
+    // ATE1  enable local character echo in command mode
     case 'E':
       if (buf[idx] == '?')
         cmdPrint(cfg->cmecho);
@@ -661,6 +674,8 @@ void HAYES::dispatch() {
       break;
 
     // ATF Set local data mode echo
+    // ATF0  Half Duplex, modem echoes characters in data mode
+    // ATF1  Full Duplex, modem does not echo characters in data mode
     case 'F':
       if (buf[idx] == '?')
         cmdPrint(cfg->dtecho);
@@ -669,6 +684,8 @@ void HAYES::dispatch() {
       break;
 
     // ATH Hook control
+    // ATH0  force line on hook (offline)
+    // ATH1  force line off hook (online)
     case 'H':
       afskModem->setLine(getValidDigit(0, 1, 0));
       if (not afskModem->getLine()) {
@@ -679,6 +696,14 @@ void HAYES::dispatch() {
       break;
 
     // ATI Show info
+    // ATI0  device name and speed
+    // ATI1  ROM checksum
+    // ATI2  tests ROM checksum, then reports it
+    // ATI3  firmware revision
+    // ATI4  data connection info (modem features)
+    // ATI5  regional settings
+    // ATI6  long device description
+    // ATI7  manufacturer info
     case 'I': {
         uint8_t rqInfo = 0x00;
         // Get the digit value
@@ -687,7 +712,7 @@ void HAYES::dispatch() {
           // Specify the line to display
           rqInfo = 0x01 << value;
 
-          // 0 Modem model and speed
+          // 0 Device name and speed
           if (rqInfo & 0x01)
             print_P(DEVNAME, true);
           rqInfo = rqInfo >> 1;
@@ -697,14 +722,14 @@ void HAYES::dispatch() {
             cmdPrint('\0', cfg->crc8);
           rqInfo = rqInfo >> 1;
 
-          // 2 Tests ROM checksum THEN reports it
+          // 2 Tests ROM checksum, then reports it
           if (rqInfo & 0x01) {
             struct CFG_t cfgTemp;
             cmdResult = profile.read(&cfgTemp) ? RC_OK : RC_ERROR;
           }
           rqInfo = rqInfo >> 1;
 
-          // 3 Firmware revision level.
+          // 3 Firmware revision
           if (rqInfo & 0x01) {
             print_P(VERSION, true);
             print_P(DATE,    true);
@@ -719,12 +744,12 @@ void HAYES::dispatch() {
           // 5 Regional Settings
           rqInfo = rqInfo >> 1;
 
-          // 6 Data connection info
+          // 6 Long device description
           if (rqInfo & 0x01)
             print_P(DESCRP,  true);
           rqInfo = rqInfo >> 1;
 
-          // 7 Manufacturer and model info
+          // 7 Manufacturer info
           if (rqInfo & 0x01)
             print_P(AUTHOR,  true);
           rqInfo = rqInfo >> 1;
@@ -733,6 +758,10 @@ void HAYES::dispatch() {
       break;
 
     // ATL Set speaker volume level
+    // ATL0  medium volume, -9dB
+    // ATL1  medium volume, -6dB
+    // ATL2  medium volume, -3dB
+    // ATL3  maximum volume, 0dB
     case 'L':
       if (buf[idx] == '?')
         cmdPrint(cfg->spklvl);
@@ -741,6 +770,10 @@ void HAYES::dispatch() {
       break;
 
     // ATM Speaker control
+    // ATM0  speaker always off
+    // ATM1  speaker on for TX
+    // ATM2  speaker on for RX
+    // ATM3  speaker on for both TX and RX
     case 'M':
       if (buf[idx] == '?')
         cmdPrint(cfg->spkmod);
@@ -749,11 +782,13 @@ void HAYES::dispatch() {
       break;
 
     // ATO Return to data mode
+    // ATO0  back to data mode, while in command mode
+    // ATO1  stay in command mode (nonsense)
     case 'O':
       // No more response messages
       cmdResult = RC_NONE;
       // Data mode
-      afskModem->setMode(getValidDigit(0, 1, 0) + 1);
+      afskModem->setMode(getValidDigit(0, 1, 0) == 0 ? DATA_MODE : COMMAND_MODE);
       break;
 
     // ATP Pulse dialing
@@ -763,6 +798,9 @@ void HAYES::dispatch() {
       break;
 
     // ATQ Quiet Mode
+    // ATQ0  modem returns result codes
+    // ATQ1  modem does not return result codes
+    // ATQ2  modem does not return result codes for ATA command
     case 'Q':
       if (buf[idx] == '?')
         cmdPrint(cfg->quiet);
@@ -771,6 +809,7 @@ void HAYES::dispatch() {
       break;
 
     // ATS Addresses An S-register
+    // ATSx=y  set value "y" in register "x"
     case 'S':
       // Get the register number
       _sreg = getValidInteger(0, 15, 255, (uint8_t)2);
@@ -798,6 +837,8 @@ void HAYES::dispatch() {
       break;
 
     // ATV Verbose mode
+    // ATV0  send numeric codes
+    // ATV1  send text result codes (English)
     case 'V':
       if (buf[idx] == '?')
         cmdPrint(cfg->verbal);
@@ -806,6 +847,8 @@ void HAYES::dispatch() {
       break;
 
     // ATX Select call progress method
+    // ATX0  basic result codes: "CONNECT" and "NO CARRIER"
+    // ATX1  extended result codes: "CONNECT 300" and "NO CARRIER 00:00:00" (call time)
     case 'X':
       if (buf[idx] == '?')
         cmdPrint(cfg->selcpm);
@@ -813,7 +856,7 @@ void HAYES::dispatch() {
         cfg->selcpm = getValidDigit(0, 1, cfg->selcpm);
       break;
 
-    // ATZ Reset
+    // ATZ MCU (and modem) reset
     case 'Z':
       // No more response messages
       cmdResult = RC_NONE;
@@ -826,7 +869,9 @@ void HAYES::dispatch() {
     // Standard '&' extension
     case '&':
       switch (buf[idx++]) {
-        // Reverse answering frequencies
+        // AT&A Reverse answering frequencies
+        // AT&A0  use receiving modem frequencies on answering
+        // AT&A1  use originating modem frequencies on answering
         case 'A':
           if (buf[idx] == '?')
             cmdPrint('A', '&', cfg->revans);
@@ -834,7 +879,9 @@ void HAYES::dispatch() {
             cfg->revans = getValidDigit(0, 1, cfg->revans);
           break;
 
-        // DCD Option
+        // AT&C DCD Option
+        // AT&C0  always keep DCD on (consider RX carrier present)
+        // AT&C1  DCD follows RX carrier
         case 'C':
           if (buf[idx] == '?')
             cmdPrint('C', '&', cfg->dcdopt);
@@ -842,7 +889,7 @@ void HAYES::dispatch() {
             cfg->dcdopt = getValidDigit(0, 1, cfg->dcdopt);
           break;
 
-        // DTR Option
+        // AT&D DTR Option
         case 'D':
           if (buf[idx] == '?')
             cmdPrint('D', '&', cfg->dtropt);
@@ -850,12 +897,15 @@ void HAYES::dispatch() {
             cfg->dtropt = getValidDigit(0, 3, cfg->dtropt);
           break;
 
-        // Factory defaults
+        // AT&F Load factory defaults
         case 'F':
           cmdResult = profile.factory(cfg) ? RC_OK : RC_ERROR;
           break;
 
-        // Flow Control Selection
+        // AT&K Flow Control Selection
+        // AT&K0  disable flow control
+        // AT&K3  enables CTS/RTS hardware flow control
+        // AT&K4  enables XON/XOFF software flow control
         case 'K':
           if (buf[idx] == '?')
             cmdPrint('K', '&', cfg->flwctr);
@@ -895,7 +945,11 @@ void HAYES::dispatch() {
             cfg->dsropt = getValidDigit(0, 2, cfg->dsropt);
           break;
 
-        // Show the configuration
+        // AT&V Show the configuration
+        // AT&V   show everything
+        // AT&V0  show current profile
+        // AT&V1  show stored profiles
+        // AT&V2  show stored phone numbers
         case 'V':
           // Show the active profile
           if ((buf[idx] == '0') or (buf[idx] == '\0')) {
@@ -931,19 +985,23 @@ void HAYES::dispatch() {
           cmdResult = RC_OK;
           break;
 
-        // Store the configuration
+        // AT&W Store the configuration
+        // AT&Wx  store the profile in position "x"
         case 'W':
           option = getValidDigit(0, eeProfNums - 1, 0);
           cmdResult = profile.write(cfg, option) ? RC_OK : RC_ERROR;
           break;
 
-        // Read the configuration
+        // AT&Y Read the configuration
+        // AT&Yx  read the profile from position "x"
         case 'Y':
           option = getValidDigit(0, eeProfNums - 1, 0);
           cmdResult = profile.read(cfg, option, false) ? RC_OK : RC_ERROR;
           break;
 
         // AT&Z Store Telephone Number
+        // AT&Z=nnn   store phone number in position 0
+        // AT&Zx=nnn  store phone number in position "x"
         case 'Z':
           cmdResult = RC_OK;
           if (buf[idx] == '=') {
@@ -978,6 +1036,10 @@ void HAYES::dispatch() {
 
     // Partial '+' extension
     case '+':
+      // AT+FCLASS set the device for different modes (only data supported)
+      // AT+FCLASS?   show current device mode
+      // AT+FCLASS=?  list the supported device modes
+      // AT+FCLASS=0  set the device mode to data
       if (strncmp(&buf[idx], "FCLASS", 6) == 0) {
         idx += 6;
         if (buf[idx] == '?' or
