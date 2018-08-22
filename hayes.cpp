@@ -529,7 +529,7 @@ void HAYES::printResult(uint8_t code, char* buf) {
     if (cfg->verbal) {
       printCRLF();
       print_P(rcMsg[code]);
-      if (buf != NULL) {
+      if ((buf != NULL) and (cfg->selcpm != 0)) {
         Serial.write(' ');
         Serial.print(buf);
       }
@@ -566,7 +566,10 @@ void HAYES::dispatch() {
       if (afskModem->getRxCarrier()) {
         // Phase 4: Data mode if carrier found
         afskModem->setMode(DATA_MODE);
-        cmdResult = RC_CONNECT;
+        if (cfg->selcpm == 0)
+          cmdResult = RC_CONNECT;
+        else
+          cmdResult = RC_CONNECT_300;
       }
       else {
         // No carrier, go offline
@@ -628,7 +631,10 @@ void HAYES::dispatch() {
               cmdResult = RC_OK;
             else {
               afskModem->setMode(DATA_MODE);
-              cmdResult = RC_CONNECT;
+              if (cfg->selcpm == 0)
+                cmdResult = RC_CONNECT;
+              else
+                cmdResult = RC_CONNECT_300;
             }
           }
           else {
