@@ -35,8 +35,10 @@ HAYES hayes(&cfg, &afsk);
   ADC Interrupt vector, called for each sample
 */
 ISR(ADC_vect) {
+  // Clear the Interrupt Flag Register
   TIFR1 = _BV(ICF1);
 #ifndef DEBUG
+  // Hadle TX/RX
   afsk.doTXRX();
 #endif
 }

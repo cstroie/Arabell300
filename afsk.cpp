@@ -140,20 +140,20 @@ void AFSK::initHW() {
   ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADATE) | _BV(ADIE) | _BV(ADPS2);
 
   // Set up Timer 2 to do Pulse Width Modulation on PIN 3 or 11
-  ASSR    &= ~(_BV(EXCLK) | _BV(AS2));  // Use internal clock (p.160)
-  TCCR2A  |= _BV(WGM21)   | _BV(WGM20); // Set fast PWM mode  (p.157)
-  TCCR2B  &= ~_BV(WGM22);
+  ASSR    &= ~(_BV(EXCLK) | _BV(AS2));  // Use internal clock (p.213)
+  TCCR2A  |=   _BV(WGM21) | _BV(WGM20); // Set fast PWM mode  (p.205)
+  TCCR2B  &= ~(_BV(WGM22));
 
   // Configure the PWM PIN 11 (PB3)
   PORTB &= ~(_BV(PORTB3));
-  DDRB  |= _BV(PORTB3);
+  DDRB  |=   _BV(PORTB3);
   // Configure the PWM PIN 3 (PD3)
   PORTD &= ~(_BV(PORTD3));
-  DDRD  |= _BV(PORTD3);
-  // Do non-inverting PWM on pin OC2A and OC2B (p.155)
+  DDRD  |=   _BV(PORTD3);
+  // Do non-inverting PWM on pin OC2A and OC2B (p.205)
   TCCR2A = (TCCR2A | _BV(COM2A1) | _BV(COM2B1)) & (~_BV(COM2A0) | ~_BV(COM2B0));
-  // No prescaler (p.158)
-  TCCR2B = (TCCR2B & ~(_BV(CS12) | _BV(CS11))) | _BV(CS10);
+  // No prescaler (p.206)
+  TCCR2B = (TCCR2B & ~(_BV(CS22) | _BV(CS21))) | _BV(CS20);
 
   // Configure the leds: RX PB0(8), TX PB1(9), CD PB2(10), OH PB4(12)
   DDRB |= _BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0);
