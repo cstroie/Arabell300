@@ -153,7 +153,7 @@ bool Profile::factory(CFG_t *cfg) {
   cfg->compro = 0x10; // ATB
   cfg->txcarr = 0x01; // ATC
   cfg->cmecho = 0x01; // ATE
-  cfg->dtecho = 0x00; // ATF
+  cfg->dtecho = 0x01; // ATF
   cfg->spklvl = 0x01; // ATL
   cfg->spkmod = 0x00; // ATM
   cfg->quiet  = 0x00; // ATQ

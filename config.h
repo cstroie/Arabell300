@@ -51,7 +51,7 @@ struct CFG_t {
       uint8_t compro: 5;  // ATB Select communication protocol
       uint8_t txcarr: 1;  // ATC Keep a carrier going when transmitting
       uint8_t cmecho: 1;  // ATE Local command mode echo
-      uint8_t dtecho: 1;  // ATF Local data mode echo
+      uint8_t dtecho: 1;  // ATF Half/Full duplex and local data mode echo
       uint8_t spklvl: 2;  // ATL Speaker volume level
       uint8_t spkmod: 2;  // ATM Speaker mode
       uint8_t quiet : 2;  // ATQ Quiet mode

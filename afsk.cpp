@@ -680,8 +680,9 @@ uint8_t AFSK::doSIO() {
         // There is data on serial port, process it normally
         c = Serial.read();
         if (txFIFO.in(c))
-          // Local data mode echo
-          if (cfg->dtecho)
+          // Half/Full duplex and local data mode echo (inverted)
+          if (cfg->dtecho == OFF)
+            // Local write only on half duplex
             Serial.write((char)c);
         // Keep the time
         lstChar = now;
