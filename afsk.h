@@ -154,7 +154,8 @@ class AFSK {
     uint32_t cdTOut;  // RX carrier timeout
 
     // Serial flow control tracking status
-    bool flowControl = false;
+    bool inFlow = false;
+    bool outFlow = false;
 
 
     TX_t tx;

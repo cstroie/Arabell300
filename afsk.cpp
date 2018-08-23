@@ -158,8 +158,13 @@ void AFSK::initHW() {
   // Configure the leds: RX PB0(8), TX PB1(9), CD PB2(10), OH PB4(12)
   DDRB |= _BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0);
   // Configure RTS/CTS
-  DDRD |=   _BV(PORTD7);
-  DDRD &= ~(_BV(PORTD6));
+  DDRD  |=   _BV(PORTD7);  // CTS
+  DDRD  &= ~(_BV(PORTD6)); // RTS
+  PORTD |=   _BV(PORTD6) | _BV(PORTD7);
+  // Configure DTR/DSR
+  DDRD  |=   _BV(PORTD5);  // DSR
+  DDRD  &= ~(_BV(PORTD4)); // DTR
+  PORTD |=   _BV(PORTD4) | _BV(PORTD5);
 
   // Set initial PWM to the first sample
   DAC_A(wave.sample(0));
@@ -176,7 +181,7 @@ void AFSK::initHW() {
 */
 void AFSK::setLeds(uint8_t onoff) {
   if (onoff)
-    PORTB |= (_BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0));
+    PORTB |=  (_BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0));
   else
     PORTB &= ~(_BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0));
 }
@@ -673,10 +678,32 @@ uint8_t AFSK::doSIO() {
 
   // Only in data mode
   if (this->opMode != COMMAND_MODE) {
+    switch (cfg->flwctr) {
+      case 4:
+        // Check if the next character is a XON/XOFF flow control,
+        // only if flow control is enabled
+        c = Serial.peek();
+        if (c == 0x13) {
+          // XOFF
+          Serial.read();
+          outFlow = true;
+        }
+        else if (c == 0x10) {
+          // XON
+          Serial.read();
+          outFlow = false;
+        };
+        break;
+      case 3:
+        // RTS/CTS flow control
+        outFlow = (cfg->rtsopt == 0) and (not (PIND & _BV(PORTD4)));
+        break;
+    }
+
     // Check if the FIFO is not getting full
     if (txFIFO.len() < fifoHgh) {
       // Check if we can take the byte
-      if (available and (txFIFO.len() < fifoMed or (not flowControl))) {
+      if (available and (txFIFO.len() < fifoMed or (not inFlow))) {
         // There is data on serial port, process it normally
         c = Serial.read();
         if (txFIFO.in(c))
@@ -690,7 +717,7 @@ uint8_t AFSK::doSIO() {
         tx.active = ON;
       }
     }
-    else if (not flowControl and cfg->flwctr != 0) {
+    else if (not inFlow and cfg->flwctr != 0) {
       // FIFO is getting full, check the flow control
       if (cfg->flwctr == 4)
         // XON/XOFF flow control: XOFF
@@ -699,11 +726,11 @@ uint8_t AFSK::doSIO() {
         // RTS/CTS flow control
         PORTD &= ~_BV(PORTD7);
       // Stop flow
-      flowControl = true;
+      inFlow = true;
     }
 
     // Anytime, try to disable flow control, if we can
-    if (flowControl and txFIFO.len() < fifoLow) {
+    if (inFlow and txFIFO.len() < fifoLow) {
       if (cfg->flwctr == 4)
         // XON/XOFF flow control: XON
         Serial.write(0x11);
@@ -711,11 +738,11 @@ uint8_t AFSK::doSIO() {
         // RTS/CTS flow control
         PORTD |= _BV(PORTD7);
       // Resume flow
-      flowControl = false;
+      inFlow = false;
     }
 
     // Check if there is any data in RX FIFO
-    if (not rxFIFO.empty()) {
+    if (not rxFIFO.empty() and (not outFlow)) {
       // Get the byte and send it to serial line
       c = rxFIFO.out();
       Serial.write(c);
