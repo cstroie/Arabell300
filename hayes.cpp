@@ -690,8 +690,11 @@ void HAYES::dispatch() {
       afskModem->setLine(getValidDigit(0, 1, 0));
       if (not afskModem->getLine()) {
         char buf[20];
-        getUptime(afskModem->callTime(), buf, 20);
-        printResult(RC_NO_CARRIER, buf);
+        uint32_t upt = afskModem->callTime();
+        if (upt > 0) {
+          getUptime(upt, buf, 20);
+          printResult(RC_NO_CARRIER, buf);
+        }
       }
       break;
 

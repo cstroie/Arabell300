@@ -490,7 +490,7 @@ void AFSK::rxDecoder(uint8_t bt) {
         cdTOut = millis() + cfg->sregs[10] * 100UL;
       }
       // Check for carrier timeout
-      if ((cfg->dcdopt != 0) and (millis() > cdTOut)) {
+      if ((cfg->dcdopt != 0) and (cfg->sregs[10] != 0) and (millis() > cdTOut)) {
         // Disable the CD flag and led
         this->setRxCarrier(OFF);
         // Stay in NO_CARRIER until SIO moves it to NOP
@@ -885,6 +885,8 @@ bool AFSK::getRxCarrier() {
     // Don't detect the carrier, go directly to WAIT
     this->setRxCarrier(ON);
     rx.state = WAIT;
+    // Reuse the carrier counter as call timer
+    cdCount = millis();
   }
   else {
     // Use the decoder to check for carrier
@@ -949,7 +951,12 @@ bool AFSK::dial(char *phone) {
   @return call duration in seconds
 */
 uint32_t AFSK::callTime() {
-  return (millis() - cdCount) / 1000;
+  uint32_t result = 0;
+  if (cdCount != 0) {
+    result = (millis() - cdCount) / 1000;
+    cdCount = 0;
+  }
+  return result;
 }
 
 /**
