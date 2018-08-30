@@ -718,6 +718,37 @@ uint8_t AFSK::doSIO() {
 
   // Only in data mode
   if (this->opMode != COMMAND_MODE) {
+    // Data mode, say to hayes we have processed the data
+    result = 254;
+
+    // Check DTR and act accordingly
+    if (cfg->dtropt > 0) {
+      // Check DTR
+      if (not (PIND & _BV(PORTD4))) {
+        // DTR low
+        switch (cfg->dtropt) {
+          case 1: // Return to command mode
+            // Go in command mode
+            this->setMode(COMMAND_MODE);
+            // RC_OK
+            result = 0;
+            break;
+          case 2: // Hang up, turn off auto answer, return to command mode
+            // No auto-answer
+            cfg->sregs[0] = 0;
+            // Go offline and command mode
+            this->setLine(OFF);
+            // RC_NO_CARRIER
+            result = 3;
+            break;
+          case 3: // Reset
+            wdt_enable(WDTO_250MS);
+            while (true) {};
+            break;
+        }
+      }
+    }
+
     // Flow control for outgoing (to DTE)
     switch (cfg->flwctr) {
       case FC_XONXOFF:
@@ -737,7 +768,7 @@ uint8_t AFSK::doSIO() {
         break;
       case FC_RTSCTS:
         // RTS/CTS flow control
-        outFlow = (cfg->rtsopt == 0) and (not (PIND & _BV(PORTD4)));
+        outFlow = (cfg->rtsopt == 0) and (not (PIND & _BV(PORTD6)));
         break;
     }
 
@@ -787,8 +818,6 @@ uint8_t AFSK::doSIO() {
       c = rxFIFO.out();
       Serial.write(c);
     }
-    // Data mode, say to hayes we have processed the data
-    result = 254;
   }
 
   // Return the result (for hayes.doSIO, to print it)
