@@ -31,10 +31,10 @@
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Arabell300";
-const char VERSION[]  PROGMEM = "v3.46";
+const char VERSION[]  PROGMEM = "v3.47";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DESCRP[]   PROGMEM = "Arduino based Bell 103 and ITU V.21 AFSK modem";
-const char FTRS[]     PROGMEM = "a0000400080004000\r\nb000008\r\nr1001000000000000";
+const char FTRS[]     PROGMEM = "a0020400080004000\r\nb000008\r\nr1001000000000000";
 const char DATE[]     PROGMEM = __DATE__;
 
 
@@ -61,6 +61,7 @@ struct CFG_t {
       uint8_t revans: 1;  // AT&A Reverse answering frequencies
       uint8_t dcdopt: 1;  // AT&C DCD option selection
       uint8_t dtropt: 2;  // AT&D DTR option selection
+      uint8_t jcksel: 1;  // AT&J Jack type selection
       uint8_t flwctr: 3;  // AT&K Flow control selection
       uint8_t lnetpe: 1;  // AT&L Line type slection
       uint8_t plsrto: 2;  // AT&P Make/Break ratio for pulse dialing

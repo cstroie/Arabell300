@@ -163,6 +163,7 @@ bool Profile::factory(CFG_t *cfg) {
   cfg->revans = 0x00; // AT&A
   cfg->dcdopt = 0x01; // AT&C
   cfg->dtropt = 0x01; // AT&D
+  cfg->jcksel = 0x00; // AT&J
   cfg->flwctr = 0x00; // AT&K
   cfg->lnetpe = 0x00; // AT&L
   cfg->plsrto = 0x00; // AT&P

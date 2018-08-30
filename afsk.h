@@ -171,8 +171,10 @@ class AFSK {
     uint8_t rxSample;
     uint8_t txSample;
 
-    inline void DAC_A(uint8_t sample);
-    inline void DAC_B(uint8_t sample);
+    uint8_t selDAC;
+    inline void priDAC(uint8_t sample);
+    inline void secDAC(uint8_t sample);
+
     void initHW();
     void txHandle();
     void rxHandle(uint8_t sample);

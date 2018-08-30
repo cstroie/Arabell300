@@ -168,8 +168,8 @@ void AFSK::initHW() {
   PORTD |=   _BV(PORTD4) | _BV(PORTD5);
 
   // Set initial PWM to the first sample
-  DAC_A(wave.sample(0));
-  DAC_B(wave.sample(0));
+  priDAC(wave.sample(0));
+  secDAC(wave.sample(0));
 
   // Enable interrupts
   sei();
@@ -204,29 +204,35 @@ void AFSK::doTXRX() {
 }
 
 /**
-  Send the sample to the DAC
+  Send the sample to the primary DAC
 
   @param sample the sample to output to DAC
 */
-inline void AFSK::DAC_A(uint8_t sample) {
-#if PWM_PIN == 11
-  OCR2A = sample;
-#else
-  OCR2B = sample;
-#endif
+inline void AFSK::priDAC(uint8_t sample) {
+  switch (selDAC) {
+    case 1:
+      OCR2B = sample;
+      break;
+    default:
+      OCR2A = sample;
+      break;
+  }
 }
 
 /**
-  Send the sample to the DAC
+  Send the sample to the secondary DAC
 
   @param sample the sample to output to DAC
 */
-inline void AFSK::DAC_B(uint8_t sample) {
-#if PWM_PIN == 11
-  OCR2B = sample;
-#else
-  OCR2A = sample;
-#endif
+inline void AFSK::secDAC(uint8_t sample) {
+  switch (selDAC) {
+    case 0:
+      OCR2B = sample;
+      break;
+    default:
+      OCR2A = sample;
+      break;
+  }
 }
 
 
@@ -241,7 +247,7 @@ void AFSK::txHandle() {
     // First thing first: get the sample
     txSample = wave.sample(tx.idx);
     // Output the sample
-    DAC_A(txSample);
+    priDAC(txSample);
     // Step up the index for the next sample
     tx.idx += fsqTX->step[tx.dtbit];
 
@@ -367,7 +373,7 @@ void AFSK::txHandle() {
     else if (dtmf.getSample()) {
       // Get the DTMF sample and send to DAC
       txSample = dtmf.sample;
-      DAC_A(txSample);
+      priDAC(txSample);
     }
     else if (not txFIFO.empty()) {
       // Check the FIFO for dial numbers
@@ -798,14 +804,14 @@ uint8_t AFSK::doSIO() {
 void AFSK::spkHandle() {
   switch (cfg->spkmod) {
     case 1:
-      DAC_B(txSample >> (3 - cfg->spklvl));
+      secDAC(txSample >> (3 - cfg->spklvl));
       break;
     case 2:
-      DAC_B(rxSample >> (3 - cfg->spklvl));
+      secDAC(rxSample >> (3 - cfg->spklvl));
       break;
     case 3:
-      DAC_B(txSample >> (4 - cfg->spklvl) +
-            rxSample >> (4 - cfg->spklvl));
+      secDAC(txSample >> (4 - cfg->spklvl) +
+             rxSample >> (4 - cfg->spklvl));
       break;
     default:
       break;
@@ -859,6 +865,8 @@ void AFSK::setLine(uint8_t online) {
     this->setMode(COMMAND_MODE);
   }
   else {
+    // Select the jack
+    selDAC = cfg->jcksel;
     // OH led on
     PORTB |= _BV(PORTB4);
   }

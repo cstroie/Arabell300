@@ -367,6 +367,7 @@ void HAYES::showProfile(CFG_t *conf) {
   cmdPrint('A', '&', conf->revans, false);
   cmdPrint('C', '&', conf->dcdopt, false);
   cmdPrint('D', '&', conf->dtropt, false);
+  cmdPrint('J', '&', conf->jcksel, false);
   cmdPrint('K', '&', conf->flwctr, false);
   cmdPrint('L', '&', conf->lnetpe, false);
   cmdPrint('P', '&', conf->plsrto, false);
@@ -903,6 +904,16 @@ void HAYES::dispatch() {
         // AT&F Load factory defaults
         case 'F':
           cmdResult = profile.factory(cfg) ? RC_OK : RC_ERROR;
+          break;
+
+        // AT&J Jack Type Selection (choose OCR2A or OCR2B)
+        // AT&J0  OCR2A primary, OCR2B secondary
+        // AT&J1  OCR2A secondary, OCR2B primary
+        case 'J':
+          if (buf[idx] == '?')
+            cmdPrint('J', '&', cfg->jcksel);
+          else
+            cfg->jcksel = getValidDigit(0, 1, cfg->jcksel);
           break;
 
         // AT&K Flow Control Selection
