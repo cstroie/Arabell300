@@ -41,6 +41,8 @@ enum TXRX_STATE {WAIT, PREAMBLE, START_BIT, DATA_BIT, STOP_BIT, TRAIL, CARRIER, 
 enum DIRECTION {ORIGINATING, ANSWERING};
 // Command and data mode
 enum MODES {COMMAND_MODE, DATA_MODE};
+// Flow control
+enum FLOWCONTROL {FC_NONE = 0, FC_RTSCTS = 3, FC_XONXOFF = 4};
 // On / Off
 enum ONOFF {OFF, ON};
 
@@ -144,7 +146,9 @@ class AFSK {
 
     uint16_t _commaCnt;
     uint16_t _commaMax;
-    uint16_t _guard;
+
+    uint16_t escGuard;
+    char     escChar;
 
     uint8_t fulBit, hlfBit, qrtBit, octBit;
 

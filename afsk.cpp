@@ -59,8 +59,9 @@ void AFSK::init(AFSK_t afsk, CFG_t *conf) {
   this->setModemType(afsk);
   // Set the DTMF pulse and pause durations (S11)
   dtmf.setDuration(cfg->sregs[11]);
-  // Set the guard time
-  _guard = cfg->sregs[12] * 20;
+  // Set the escape character and the guard time
+  escChar  = cfg->sregs[2];
+  escGuard = cfg->sregs[12] * 20;
 }
 
 /**
@@ -612,7 +613,7 @@ uint8_t AFSK::doSIO() {
   static uint32_t lstChar  = 0;
   static uint32_t now      = 0;
   // Characters waiting on the serial input
-  bool available = (Serial.available() != 0);
+  bool inAvlb = (Serial.available() != 0);
 
   // The time
   now = millis();
@@ -621,47 +622,80 @@ uint8_t AFSK::doSIO() {
   if (escCount == 3) {
     // We did, we did taw the escape string!
     // Check for the guard silence (S12)
-    if (now - escLast > cfg->sregs[12] * 20) {
+    if (now - escLast > escGuard) {
       // This is it, go in command mode
       escCount = 0;
       this->setMode(COMMAND_MODE);
       // RC_OK
       result = 0;
     }
-    else if (available) {
-      // We saw the string recently, check if there is any
-      // other character on the line.
+    else if (inAvlb) {
+      // We just saw the full string (still in after guard time),
+      // and there is something more on the line
       c = Serial.peek();
       if (c == '\r' or c == '\n')
         // Ignore CR and LF.
         Serial.read();
-      else
-        // There is something else, ignore the escape string
+      else {
+        // There is something else, transmit the escape string
+        // to the other part and stay in data mode
+        for (uint8_t i = escCount; i > 0; i--) {
+          // Send the chars
+          txFIFO.in(escChar);
+          // Local datamode echo only on half duplex
+          if (cfg->dtecho == OFF)
+            Serial.write(escChar);
+        }
+        // Reset the counter and the first mark
         escCount = 0;
+        escFirst = 0;
+        lstChar  = now;
+      }
+    }
+  }
+  else if (escCount > 0) {
+    // There were at most two escape chars, check if it took too long
+    if (now - escFirst > escGuard) {
+      // No more '+' chars and timed out
+      for (uint8_t i = escCount; i > 0; i--) {
+        // Send the chars
+        txFIFO.in(escChar);
+        // Local datamode echo only on half duplex
+        if (cfg->dtecho == OFF)
+          Serial.write(escChar);
+      }
+      // Reset the counter
+      escCount = 0;
+      escFirst = 0;
+      lstChar  = now;
     }
   }
 
   // Check if there is any data on serial port
-  if (available) {
+  if (inAvlb) {
     // Check for "+++" escape sequence (S2)
-    if (Serial.peek() == cfg->sregs[2]) {
+    if (Serial.peek() == escChar) {
       // Check when we saw the first '+' (S12)
-      if (now - escFirst > _guard) {
-        // Check the before guard time too
-        if (now - lstChar >= _guard) {
-          // This is the first, keep the time
+      if (now - escFirst > escGuard) {
+        // The first is older than the guard time, this may be a new first,
+        // so check the before guard time too
+        if (now - lstChar >= escGuard) {
+          // This is the first, the last char was long ago, keep the time
           escCount = 1;
           escFirst = now;
+          // Remove it from the buffer and make it unavailable
+          Serial.read();
+          inAvlb = false;
         }
       }
       else {
-        // Not the first, count them up until three
-        escCount++;
-        if (escCount == 3) {
-          // This is the last, keep the time and go wait
-          // for the guard silence
+        // The last '+' was seen recently, count them up until three.
+        // If this is the last, keep the time and wait for the guard silence
+        if (++escCount == 3)
           escLast = now;
-        }
+        // Remove it from the buffer and make it unavailable
+        Serial.read();
+        inAvlb = false;
       }
     }
   }
@@ -678,8 +712,9 @@ uint8_t AFSK::doSIO() {
 
   // Only in data mode
   if (this->opMode != COMMAND_MODE) {
+    // Flow control for outgoing (to DTE)
     switch (cfg->flwctr) {
-      case 4:
+      case FC_XONXOFF:
         // Check if the next character is a XON/XOFF flow control,
         // only if flow control is enabled
         c = Serial.peek();
@@ -694,22 +729,21 @@ uint8_t AFSK::doSIO() {
           outFlow = false;
         };
         break;
-      case 3:
+      case FC_RTSCTS:
         // RTS/CTS flow control
         outFlow = (cfg->rtsopt == 0) and (not (PIND & _BV(PORTD4)));
         break;
     }
 
-    // Check if the FIFO is not getting full
+    // Check if the FIFO
     if (txFIFO.len() < fifoHgh) {
-      // Check if we can take the byte
-      if (available and (txFIFO.len() < fifoMed or (not inFlow))) {
+      // The FIFO is not getting full, so check if we can take the byte
+      if (inAvlb and (txFIFO.len() < fifoMed or (not inFlow))) {
         // There is data on serial port, process it normally
         c = Serial.read();
         if (txFIFO.in(c))
-          // Half/Full duplex and local data mode echo (inverted)
+          // Local datamode echo only on half duplex
           if (cfg->dtecho == OFF)
-            // Local write only on half duplex
             Serial.write((char)c);
         // Keep the time
         lstChar = now;
@@ -717,12 +751,12 @@ uint8_t AFSK::doSIO() {
         tx.active = ON;
       }
     }
-    else if (not inFlow and cfg->flwctr != 0) {
+    else if (not inFlow and cfg->flwctr != FC_NONE) {
       // FIFO is getting full, check the flow control
-      if (cfg->flwctr == 4)
+      if (cfg->flwctr == FC_XONXOFF)
         // XON/XOFF flow control: XOFF
         Serial.write(0x13);
-      else if (cfg->flwctr == 3)
+      else if (cfg->flwctr == FC_RTSCTS)
         // RTS/CTS flow control
         PORTD &= ~_BV(PORTD7);
       // Stop flow
@@ -731,10 +765,10 @@ uint8_t AFSK::doSIO() {
 
     // Anytime, try to disable flow control, if we can
     if (inFlow and txFIFO.len() < fifoLow) {
-      if (cfg->flwctr == 4)
+      if (cfg->flwctr == FC_XONXOFF)
         // XON/XOFF flow control: XON
         Serial.write(0x11);
-      else if (cfg->flwctr == 3)
+      else if (cfg->flwctr == FC_RTSCTS)
         // RTS/CTS flow control
         PORTD |= _BV(PORTD7);
       // Resume flow
@@ -742,7 +776,7 @@ uint8_t AFSK::doSIO() {
     }
 
     // Check if there is any data in RX FIFO
-    if (not rxFIFO.empty() and (not outFlow)) {
+    if ((not rxFIFO.empty()) and (not outFlow)) {
       // Get the byte and send it to serial line
       c = rxFIFO.out();
       Serial.write(c);
