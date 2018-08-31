@@ -927,7 +927,9 @@ void HAYES::dispatch() {
             cfg->flwctr = getValidDigit(0, 6, cfg->flwctr);
           break;
 
-        // Line Type Selection
+        // AT&L Line Type Selection
+        // AT&L0  Selects PSTN (normal dialup)
+        // AT&L1  Selects leased line
         case 'L':
           if (buf[idx] == '?')
             cmdPrint('L', '&', cfg->lnetpe);
@@ -935,7 +937,11 @@ void HAYES::dispatch() {
             cfg->lnetpe = getValidDigit(0, 1, cfg->lnetpe);
           break;
 
-        // Make/Break Ratio for Pulse Dialing
+        // AT&P Make/Break Ratio for Pulse Dialing
+        // AT&P0  Selects 39%-61% make/break ratio at 10 pulses per second (NA)
+        // AT&P1  Selects 33%-67% make/break ratio at 10 pulses per second (EU)
+        // AT&P2  Selects 39%-61% make/break ratio at 20 pulses per second (NA)
+        // AT&P3  Selects 33%-67% make/break ratio at 20 pulses per second (EU)
         case 'P':
           if (buf[idx] == '?')
             cmdPrint('P', '&', cfg->plsrto);
@@ -943,7 +949,9 @@ void HAYES::dispatch() {
             cfg->plsrto = getValidDigit(0, 3, cfg->plsrto);
           break;
 
-        // RTS/CTS Option Selection
+        // AT&R RTS/CTS Option Selection
+        // AT&R0  ignore RTS
+        // AT&R1  read RTS to control outgoing flow
         case 'R':
           if (buf[idx] == '?')
             cmdPrint('R', '&', cfg->rtsopt);

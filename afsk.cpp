@@ -497,11 +497,14 @@ void AFSK::rxDecoder(uint8_t bt) {
         cdTOut = millis() + cfg->sregs[10] * 100UL;
       }
       // Check for carrier timeout
-      if ((cfg->dcdopt != 0) and (cfg->sregs[10] != 0) and (millis() > cdTOut)) {
-        // Disable the CD flag and led
-        this->setRxCarrier(OFF);
-        // Stay in NO_CARRIER until SIO moves it to NOP
-        rx.state = NO_CARRIER;
+      if (millis() > cdTOut) {
+        // Report NO CARRIER if &C1, &L0 and timeout set
+        if ((cfg->dcdopt != 0) and (cfg->sregs[10] != 0) and (cfg->lnetpe != 1)) {
+          // Disable the CD flag and led
+          this->setRxCarrier(OFF);
+          // Stay in NO_CARRIER until SIO moves it to NOP
+          rx.state = NO_CARRIER;
+        }
       }
       break;
 
@@ -973,9 +976,9 @@ void AFSK::setRxCarrier(uint8_t onoff) {
   @return the carrier detection status
 */
 bool AFSK::getRxCarrier() {
-  // If the value specified in S7 is zero or &C0,
+  // If the value specified in S7 is zero or &C0 or &L1,
   // don't wait for the carrier, report as found
-  if ((cfg->sregs[7] == 0) or (cfg->dcdopt == 0)) {
+  if ((cfg->sregs[7] == 0) or (cfg->dcdopt == 0) or (cfg->lnetpe == 1)) {
     // Don't detect the carrier, go directly to WAIT
     this->setRxCarrier(ON);
     rx.state = WAIT;
@@ -1010,31 +1013,34 @@ bool AFSK::getRxCarrier() {
 */
 bool AFSK::dial(char *phone) {
   bool result = true;
-  // Disable the TX carrier
-  this->setTxCarrier(OFF);
-  // Sanitize S8 and set the comma delay value
-  if (cfg->sregs[8] > 6)
-    cfg->sregs[8] = 2;
-  _commaMax = F_SAMPLE * cfg->sregs[8];
-  _commaCnt = 0;
-  // Clear TX FIFO for storing the dial number into
-  txFIFO.clear();
-  // Prepend and append comma-delays
-  txFIFO.in(',');
-  while (*phone != 0)
-    txFIFO.in(*phone++);
-  txFIFO.in(',');
-  // Start dialing
-  this->isDialing = ON;
-  // Block until dialing is over
-  while (this->isDialing == ON) {
-    // Stop dialing if there is any char on serial
-    if (Serial.available()) {
-      this->isDialing = OFF;
-      result = false;
+  // If leased line (&L1), do not dial
+  if (cfg->lnetpe == 0) {
+    // Disable the TX carrier
+    this->setTxCarrier(OFF);
+    // Sanitize S8 and set the comma delay value
+    if (cfg->sregs[8] > 6)
+      cfg->sregs[8] = 2;
+    _commaMax = F_SAMPLE * cfg->sregs[8];
+    _commaCnt = 0;
+    // Clear TX FIFO for storing the dial number into
+    txFIFO.clear();
+    // Prepend and append comma-delays
+    txFIFO.in(',');
+    while (*phone != 0)
+      txFIFO.in(*phone++);
+    txFIFO.in(',');
+    // Start dialing
+    this->isDialing = ON;
+    // Block until dialing is over
+    while (this->isDialing == ON) {
+      // Stop dialing if there is any char on serial
+      if (Serial.available()) {
+        this->isDialing = OFF;
+        result = false;
+      }
+      // Busy delay
+      delay(10);
     }
-    // Busy delay
-    delay(10);
   }
   return result;
 }
