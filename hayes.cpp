@@ -1022,7 +1022,7 @@ void HAYES::dispatch() {
             // If the current char is '=', the slot is zero
             // and the phone number starts at the next char
             option = 0;
-            idx++;
+            idx += 1;
           }
           else if (buf[idx + 1] == '=') {
             // If the next char is '=', the slot is specified before it
@@ -1033,8 +1033,15 @@ void HAYES::dispatch() {
           else
             // The slot is zero
             option = 0;
-          // Get the phone number
-          if (cmdResult == RC_OK) {
+          // Get the chars after '='
+          if (buf[idx] == '?') {
+            // Get the stored phone number
+            char dn[eePhoneLen];
+            profile.pbGet(dn, option);
+            Serial.print(option); Serial.print(F("=")); Serial.print(dn);
+            cmdResult = RC_OK;
+          }
+          else if (cmdResult == RC_OK) {
             // Get the dial number and parameters, if valid
             if (getDialNumber(dialNumber, sizeof(dialNumber) - 1)) {
               // Store the dial number if the specified position
