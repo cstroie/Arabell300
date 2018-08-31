@@ -132,6 +132,7 @@ class AFSK {
     bool dial(char *phone);
     void doTXRX();
     void setLeds(uint8_t onoff);
+    void clearRing();
     uint8_t doSIO();
     uint32_t callTime();
 
@@ -163,6 +164,10 @@ class AFSK {
     // Serial flow control tracking status
     bool inFlow = false;
     bool outFlow = false;
+
+    // Ring
+    uint32_t inpRingTimeout;
+    uint32_t outRingTimeout;
 
 
     TX_t tx;

@@ -156,8 +156,8 @@ void AFSK::initHW() {
   // No prescaler (p.206)
   TCCR2B = (TCCR2B & ~(_BV(CS22) | _BV(CS21))) | _BV(CS20);
 
-  // Configure the leds: RX PB0(8), TX PB1(9), CD PB2(10), OH PB4(12)
-  DDRB |= _BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0);
+  // Configure the leds: RX PB0(8), TX PB1(9), CD PB2(10), OH PB4(12), RI PB5(13)
+  DDRB  |= _BV(PORTB5) | _BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0);
   // Configure RTS/CTS
   DDRD  |=   _BV(PORTD7);  // CTS
   DDRD  &= ~(_BV(PORTD6)); // RTS
@@ -166,6 +166,9 @@ void AFSK::initHW() {
   DDRD  |=   _BV(PORTD5);  // DSR
   DDRD  &= ~(_BV(PORTD4)); // DTR
   PORTD |=   _BV(PORTD4) | _BV(PORTD5);
+  // Configure ring trigger (2)
+  DDRD  &= ~(_BV(PORTD2));
+  PORTD |=   _BV(PORTD2);
 
   // Set initial PWM to the first sample
   priDAC(wave.sample(0));
@@ -182,9 +185,21 @@ void AFSK::initHW() {
 */
 void AFSK::setLeds(uint8_t onoff) {
   if (onoff)
-    PORTB |=  (_BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0));
+    PORTB |=  (_BV(PORTB5) | _BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0));
   else
-    PORTB &= ~(_BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0));
+    PORTB &= ~(_BV(PORTB5) | _BV(PORTB4) | _BV(PORTB2) | _BV(PORTB1) | _BV(PORTB0));
+}
+
+/**
+  Clear any ringing counters and signals.
+*/
+void AFSK::clearRing() {
+  // Reset the signaling timeout
+  outRingTimeout = 0;
+  // Reset the counter
+  cfg->sregs[1] = 0;
+  // Stop sending signal to RI
+  PORTB &= ~(_BV(PORTB5));
 }
 
 /**
@@ -626,6 +641,33 @@ uint8_t AFSK::doSIO() {
 
   // The time
   now = millis();
+
+  // Check the RING input, only when offline, 10 times per second
+  if (this->onLine == OFF and this->opMode == COMMAND_MODE and
+      (now >= inpRingTimeout or inpRingTimeout == 0)) {
+    inpRingTimeout = now + 100UL;
+    // Check if ringing
+    if (not (PIND & _BV(PORTD2))) {
+      // Ringing
+      if (now > outRingTimeout or outRingTimeout == 0) {
+        // Update the timeout
+        outRingTimeout = now + 2000UL;
+        // Send signal to RI
+        PORTB |= _BV(PORTB5);
+        // Increment the counter
+        cfg->sregs[1] += 1;
+        // RC_RING
+        result = 2;
+      }
+    }
+    else if (cfg->sregs[1] != 0) {
+      // No ringing, but the counter is not zero, so it was
+      // ringing and stopped; clear everything
+      this->clearRing();
+    }
+    if (result != 255)
+      return result;
+  }
 
   // Check if we saw the escape string "+++"
   if (escCount == 3) {

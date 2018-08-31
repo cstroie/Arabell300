@@ -390,11 +390,29 @@ uint8_t HAYES::doSIO(uint8_t rcRemote) {
   char c;
   // Check if we just have to print a result
   if (rcRemote != RC_NONE) {
-    // If NO CARRIER, show the call time
+    // Check for some special cases
     if (rcRemote == RC_NO_CARRIER) {
+      // If NO CARRIER, show the call time
       char buf[20];
       getUptime(afskModem->callTime(), buf, 20);
       printResult(rcRemote, buf);
+    }
+    else if (rcRemote == RC_RING and \
+             cfg->sregs[1] >= cfg->sregs[0] and \
+             cfg->sregs[0] > 0) {
+      // Ringing and auto answer is enabled and reached,
+      // so auto-answer by mangling the input buffer
+      strcpy_P(buf, PSTR("ATA"));
+      // Print the remote result first
+      printResult(rcRemote);
+      // Print the input buffer
+      Serial.print(buf);
+      // Send the newline
+      printCRLF();
+      // Parse the line
+      doCommand();
+      // Print the command response
+      printResult(cmdResult);
     }
     else
       // Just print the remote result
@@ -560,6 +578,8 @@ void HAYES::dispatch() {
     // ATA Answer incomming call
     case 'A':
       cmdResult = RC_ERROR;
+      // Phase 0: Clear any ringing counters and signals
+      afskModem->clearRing();
       // Phase 1: Set direction
       afskModem->setDirection(ANSWERING);
       // Phase 2: Go online
@@ -689,12 +709,14 @@ void HAYES::dispatch() {
     // ATH1  force line off hook (online)
     case 'H':
       afskModem->setLine(getValidDigit(0, 1, 0));
-      if (not afskModem->getLine()) {
+      if (afskModem->getLine() == OFF) {
         char buf[20];
         uint32_t upt = afskModem->callTime();
         if (upt > 0) {
           getUptime(upt, buf, 20);
           printResult(RC_NO_CARRIER, buf);
+          // No other response
+          cmdResult = RC_NONE;
         }
       }
       break;
@@ -857,7 +879,7 @@ void HAYES::dispatch() {
       if (buf[idx] == '?')
         cmdPrint(cfg->selcpm);
       else
-        cfg->selcpm = getValidDigit(0, 1, cfg->selcpm);
+        cfg->selcpm = getValidDigit(0, 4, cfg->selcpm) == 0 ? 0 : 1;
       break;
 
     // ATZ MCU (and modem) reset
@@ -894,6 +916,10 @@ void HAYES::dispatch() {
           break;
 
         // AT&D DTR Option
+        // AT&D0  ignore DTR
+        // AT&D1  return to command mode after losing DTR
+        // AT&D2  hang up, turn off auto answer, return to command mode after losing DTR
+        // AT&D3  reset after losing DTR
         case 'D':
           if (buf[idx] == '?')
             cmdPrint('D', '&', cfg->dtropt);
@@ -929,7 +955,7 @@ void HAYES::dispatch() {
 
         // AT&L Line Type Selection
         // AT&L0  Selects PSTN (normal dialup)
-        // AT&L1  Selects leased line
+        // AT&L1  Selects leased line (no dial, no carrier detection)
         case 'L':
           if (buf[idx] == '?')
             cmdPrint('L', '&', cfg->lnetpe);

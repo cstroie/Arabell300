@@ -32,8 +32,7 @@
 // CPU frequency correction for sampling timer
 #define F_COR (0L)
 
-// The PWM primary pin may be 3 or 11 (Timer2),
-// the other being the secondary
-#define PWM_PIN 3
+// External AREF
+#define AREF_EXT
 
 #endif /* LOCAL_H */
