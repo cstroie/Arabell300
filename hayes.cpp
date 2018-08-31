@@ -951,7 +951,9 @@ void HAYES::dispatch() {
             cfg->rtsopt = getValidDigit(0, 1, cfg->rtsopt);
           break;
 
-        // DSR Option Selection
+        // AT&S DSR Option Selection
+        // AT&S0  DSR line is always on, except when on-hook
+        // AT&S1  DSR line follows CD
         case 'S':
           if (buf[idx] == '?')
             cmdPrint('S', '&', cfg->dsropt);

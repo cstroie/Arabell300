@@ -890,6 +890,9 @@ void AFSK::setLine(uint8_t online) {
     PORTB &= ~_BV(PORTB4);
     // CD off
     this->setRxCarrier(OFF);
+    // DSR always on if &S0, except when line is off
+    if (cfg->dsropt == OFF)
+      PORTD &= ~_BV(PORTD5);
     // Command mode
     this->setMode(COMMAND_MODE);
   }
@@ -898,6 +901,9 @@ void AFSK::setLine(uint8_t online) {
     selDAC = cfg->jcksel;
     // OH led on
     PORTB |= _BV(PORTB4);
+    // DSR always on if &S0
+    if (cfg->dsropt == OFF)
+      PORTD |= _BV(PORTD5);
   }
 }
 
@@ -945,12 +951,20 @@ void AFSK::setTxCarrier(uint8_t onoff) {
 */
 void AFSK::setRxCarrier(uint8_t onoff) {
   rx.carrier = onoff;
-  if (onoff == ON)
+  if (onoff == ON) {
     // CD led on
     PORTB |= _BV(PORTB2);
-  else
+    // For now, DSR follows CD if &S1
+    if (cfg->dsropt == ON)
+      PORTD |= _BV(PORTD5);
+  }
+  else {
     // CD led off
     PORTB &= ~_BV(PORTB2);
+    // For now, DSR follows CD if &S1
+    if (cfg->dsropt == ON)
+      PORTD &= ~_BV(PORTD5);
+  }
 }
 
 /**
