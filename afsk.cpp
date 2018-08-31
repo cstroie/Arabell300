@@ -921,6 +921,15 @@ void AFSK::setMode(uint8_t mode) {
 }
 
 /**
+  Get the modem mode
+
+  @return modem mode
+*/
+bool AFSK::getMode() {
+  return this->opMode;
+}
+
+/**
   Enable or disable the TX carrier going at runtime
 
   @param onoff carrier mode

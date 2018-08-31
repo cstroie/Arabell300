@@ -789,10 +789,10 @@ void HAYES::dispatch() {
     // ATO0  back to data mode, while in command mode
     // ATO1  stay in command mode (nonsense)
     case 'O':
-      // No more response messages
-      cmdResult = RC_NONE;
-      // Data mode
+      // Data mode or command mode
       afskModem->setMode(getValidDigit(0, 1, 0) == 0 ? DATA_MODE : COMMAND_MODE);
+      // Return CONNECT if back to data mode
+      cmdResult = afskModem->getMode() == DATA_MODE ? RC_CONNECT : RC_NONE;
       break;
 
     // ATP Pulse dialing

@@ -125,6 +125,7 @@ class AFSK {
     void setLine(uint8_t online);
     bool getLine();
     void setMode(uint8_t mode);
+    bool getMode();
     void setTxCarrier(uint8_t onoff);
     void setRxCarrier(uint8_t onoff);
     bool getRxCarrier();
