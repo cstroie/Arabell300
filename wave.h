@@ -38,17 +38,17 @@ static const uint8_t wavelut[] = {
 class WAVE {
   public:
     // Samples count for quarter, half and full wave
-    uint8_t   qart = sizeof(wavelut) / sizeof(*wavelut);;
-    uint8_t   half = qart + qart;
-    uint16_t  full = half + half;
+    const uint8_t   qart = sizeof(wavelut) / sizeof(*wavelut);;
+    const uint8_t   half = qart + qart;
+    const uint16_t  full = half + half;
 
     WAVE();
     ~WAVE();
 
     // Get the wave sample specified by index
     uint8_t sample(uint8_t idx);
-    // Compute the wave steps
-    uint8_t WAVE::getStep(uint32_t freq);
+    // Compute the wave steps as Q6.2
+    uint8_t getStep(uint16_t freq);
 };
 
 #endif /* WAVE_H */

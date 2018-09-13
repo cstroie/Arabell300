@@ -260,7 +260,7 @@ void AFSK::txHandle() {
   // Check if we are transmitting
   if (tx.active == ON or tx.carrier == ON) {
     // First thing first: get the sample
-    txSample = wave.sample(tx.idx);
+    txSample = wave.sample((uint8_t)((tx.idx >> 2) & 0x00FF));
     // Output the sample
     priDAC(txSample);
     // Step up the index for the next sample
@@ -1106,10 +1106,10 @@ uint32_t AFSK::callTime() {
 */
 void AFSK::simFeed() {
   // Simulation
-  static uint8_t idx = 0;
+  static uint16_t idx = 0;
   uint8_t bt = (millis() / 1000) % 2;
 
-  int8_t x = wave.sample(idx);
+  int8_t x = wave.sample((uint8_t)((idx >> 2) & 0x00FF));
 
   /*
     int8_t y = bs2225(x);
@@ -1133,6 +1133,7 @@ void AFSK::simFeed() {
 
   rxHandle(x);
   idx += fsqRX->step[bt];
+  delay(100);
 }
 
 /**

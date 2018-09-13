@@ -50,8 +50,8 @@ void DTMF::setDuration(uint8_t pulse, uint8_t pause) {
 
 bool DTMF::getSample() {
   if (state == 1) {
-    sample = (wave.sample(rowIdx) >> 1) +
-             (wave.sample(colIdx) >> 1);
+    sample = (wave.sample((uint8_t)((rowIdx >> 2) & 0x00FF)) >> 1) +
+             (wave.sample((uint8_t)((colIdx >> 2) & 0x00FF)) >> 1);
     // Step up the indices for the next samples
     rowIdx += stpRows[row];
     colIdx += stpCols[col];
