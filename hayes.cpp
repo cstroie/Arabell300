@@ -575,7 +575,7 @@ void HAYES::dispatch() {
     case '\0':
       break;
 
-    // ATA Answer incomming call
+    // ATA Answer incoming call
     case 'A':
       cmdResult = RC_ERROR;
       // Phase 0: Clear any ringing counters and signals
@@ -817,7 +817,7 @@ void HAYES::dispatch() {
       cmdResult = afskModem->getMode() == DATA_MODE ? RC_CONNECT : RC_NONE;
       break;
 
-    // ATP Pulse dialing
+    // ATP Use pulse dialing for the next call
     case 'P':
       cfg->dialpt = OFF;
       cmdResult = RC_OK;
@@ -856,7 +856,7 @@ void HAYES::dispatch() {
       }
       break;
 
-    // ATT Tone dialing
+    // ATT Use tone dialing for the next call
     case 'T':
       cfg->dialpt = ON;
       cmdResult = RC_OK;
