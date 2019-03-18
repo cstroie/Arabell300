@@ -52,7 +52,7 @@ void setup() {
   Serial.begin(115200);
   e2hex();
 #else
-  Serial.begin(300);
+  Serial.begin(115200);
 #endif
 
   // Define and configure the modem

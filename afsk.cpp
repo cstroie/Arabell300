@@ -37,7 +37,8 @@ const uint8_t fifoMed =  1 << (fifoSize - 1);
 const uint8_t fifoHgh = (1 << fifoSize) - fifoLow;
 FIFO txFIFO(fifoSize);
 FIFO rxFIFO(fifoSize);
-FIFO dyFIFO(4);
+// Delay FIFO, the size should be F_SAMPLE / BITRATE / 2 = 32
+FIFO dyFIFO(6);
 
 
 AFSK::AFSK() {
@@ -92,7 +93,8 @@ void AFSK::setModemType(AFSK_t afsk) {
     sum += ADCH;
   }
   // Keep the bias as an average of the 256 samples
-  this->bias = sum >> 8;
+  // FIXME!
+  //this->bias = sum >> 8;
 }
 
 /**
@@ -433,12 +435,51 @@ void AFSK::rxHandle(uint8_t sample) {
   //  600:   0.28187392036298453 0.4362521592740309
   //  1200:  0.4470595850866754  0.10588082982664918
 
+  /*
+     F   a     b
+     150 0.114,0.772
+     300 0.197,0.605
+     600 0.281,0.437
+     800 0.346,0.310
+    1200 0.448,0.102
+    1600 0.531,-0.063
+
+
+  */
+
+
+  /*
+    rx.iirX[0] = rx.iirX[1];
+    rx.iirX[1] = ((dyFIFO.out() - bias) * ss) >> 2;
+    //rx.iirX[1] = ((dyFIFO.out() - bias) * ss) >> 3;
+    rx.iirY[0] = rx.iirY[1];
+    rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
+    //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + ((rx.iirY[0] >> 4) * 15); // *0.9
+  */
+
+  float a = 0.197;
+  float b = 0.605;
+
+  int8_t dlySample = dyFIFO.out() - bias;
+  
+  //Serial.print(ss);
+  //Serial.print(",");
+  //Serial.print(dlySample);
+  //Serial.print(",");
+  //Serial.print((int16_t)ss * dlySample / 256);
+
+
   rx.iirX[0] = rx.iirX[1];
-  rx.iirX[1] = ((dyFIFO.out() - bias) * ss) >> 2;
-  //rx.iirX[1] = ((dyFIFO.out() - bias) * ss) >> 3;
+  rx.iirX[1] = (int16_t)(a * (dlySample * ss));
+
   rx.iirY[0] = rx.iirY[1];
-  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
-  //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + ((rx.iirY[0] >> 4) * 15); // *0.9
+  rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (int16_t)(b * rx.iirY[0]);
+
+
+  //Serial.print(",");
+  //Serial.print(rx.iirY[1]);
+
+  //Serial.println();
 
   // Keep the unsigned sample in delay FIFO
   dyFIFO.in(sample);
@@ -1107,7 +1148,7 @@ uint32_t AFSK::callTime() {
 void AFSK::simFeed() {
   // Simulation
   static uint16_t idx = 0;
-  uint8_t bt = (millis() / 1000) % 2;
+  uint8_t bt = (millis() / 2000) % 2;
 
   int8_t x = wave.sample((uint8_t)((idx >> 2) & 0x00FF));
 

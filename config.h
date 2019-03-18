@@ -27,7 +27,7 @@
 #include "local.h"
 
 // Sampling frequency
-#define F_SAMPLE    9600
+#define F_SAMPLE    19200
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Arabell300";
