@@ -85,14 +85,6 @@ void AFSK::setModemType(AFSK_t afsk) {
   // Compute CarrierDetect threshold
   cdTotal = F_SAMPLE / 10 * cfg->sregs[9];
   cdTotal = cdTotal - (cdTotal >> 4);
-  // Compute the ADC bias
-  uint16_t sum = 0;
-  for (uint16_t i = 0; i <= 255; i++) {
-    while (bit_is_set(ADCSRA, ADSC));
-    sum += ADCH;
-  }
-  // Keep the bias as an average of the 256 samples
-  this->bias = sum >> 8;
 }
 
 /**
@@ -413,6 +405,8 @@ void AFSK::txHandle() {
 void AFSK::rxHandle(uint8_t sample) {
   // Create the signed sample
   int8_t ss = sample - bias;
+  // And the signed delayed sample
+  int8_t ds = dyFIFO.out() - bias;
 
 #ifdef DEBUG_RX_LVL
   // Keep sample for level measurements
@@ -428,17 +422,16 @@ void AFSK::rxHandle(uint8_t sample) {
   }
 #endif
 
-  // First order low-pass Chebyshev filter
+  // First order low-pass Chebyshev filter, 600Hz
   //  300:   0.16272643677832518 0.6745471264433496
   //  600:   0.28187392036298453 0.4362521592740309
   //  1200:  0.4470595850866754  0.10588082982664918
 
   rx.iirX[0] = rx.iirX[1];
-  rx.iirX[1] = ((dyFIFO.out() - bias) * ss) >> 2;
-  //rx.iirX[1] = ((dyFIFO.out() - bias) * ss) >> 3;
+  rx.iirX[1] = (ds * ss) >> 2;
+  
   rx.iirY[0] = rx.iirY[1];
   rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
-  //rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + ((rx.iirY[0] >> 4) * 15); // *0.9
 
   // Keep the unsigned sample in delay FIFO
   dyFIFO.in(sample);
