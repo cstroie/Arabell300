@@ -1069,7 +1069,7 @@ void HAYES::dispatch() {
           else if (buf[idx + 1] == '=') {
             // If the next char is '=', the slot is specified before it
             // and the phone number starts at the next char
-            option = getValidDigit(0, 3, 0);
+            option = getValidDigit(0, eePhoneNums - 1, 0);
             idx += 2;
           }
           else
