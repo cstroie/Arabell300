@@ -132,8 +132,11 @@ bool Profile::read(CFG_t *cfg, uint8_t slot, bool useDefaults) {
   EEPROM.get(eeAddress + slot * eeProfLen, cfgTemp);
   // Compute the CRC8 checksum of the read data
   uint8_t crc8 = this->crc(&cfgTemp);
-  // And compare with the read crc8 checksum, also check S1
-  if (cfgTemp.crc8 == crc8 and cfgTemp.sregs[1] == 0)
+  // And compare with the read crc8 checksum, also check S1 and S2
+  if (cfgTemp.crc8 == crc8 and
+      cfgTemp.sregs[1] == 0 and
+      cfgTemp.sregs[2] >= ' ' and
+      cfgTemp.sregs[2] <= '~')
     // Copy the temporary structure to configuration and the crc8
     for (uint8_t i = 0; i < eeProfLen; i++)
       cfg->data[i] = cfgTemp.data[i];
