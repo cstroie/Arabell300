@@ -43,14 +43,32 @@ CONN::~CONN() {
 void CONN::init(CFG_t *conf) {
   cfg = conf;
   // Hardware init
-  //FIXME this->initHW();
+  this->initHW();
   // Set the modem type
-  //FIXME this->setModemType(afsk);
+  this->setModemType();
   // Set the escape character and the guard time
   escChar  = cfg->sregs[2];
   escGuard = cfg->sregs[12] * 20;
 }
 
+/**
+  Set the modem type
+
+  @param afsk the afsk modem type
+*/
+void CONN::setModemType() {
+  // Go offline, switch to command mode
+  this->setLine(OFF);
+  // Start as originating modem
+  this->setDirection(ORIGINATING);
+}
+
+/**
+  Initialize the hardware
+*/
+void CONN::initHW() {
+
+}
 
 /**
   Clear any ringing counters and signals.

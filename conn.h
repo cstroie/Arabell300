@@ -40,6 +40,7 @@ class CONN {
 
     void init(CFG_t *conf);
 
+    void setModemType();
     void setDirection(uint8_t dir, uint8_t rev = OFF);
     void setLine(uint8_t online);
     bool getLine();
@@ -81,6 +82,7 @@ class CONN {
     uint32_t connTime; // Connection time
     uint32_t connCDT ; // RX carrier time out
 
+    void initHW();
 };
 
 
