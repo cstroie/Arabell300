@@ -575,10 +575,12 @@ void HAYES::dispatch() {
     case '\0':
       break;
 
-    // AT? Print the long help message
+    // AT? Print the long help message, only for this syntax
     case '?':
-      print_P(atHelp, false);
-      cmdResult = RC_OK;
+      if (idx == 3) {
+        print_P(atHelp, false);
+        cmdResult = RC_OK;
+      }
       break;
 
     // ATA Answer incoming call
