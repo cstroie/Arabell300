@@ -28,20 +28,8 @@ CFG_t cfg;
 CONN conn;
 
 // The AT-Hayes command interface
-HAYES hayes(&cfg, &afsk);
+HAYES hayes(&cfg, &conn);
 
-
-/**
-  ADC Interrupt vector, called for each sample
-*/
-ISR(ADC_vect) {
-  // Clear the Interrupt Flag Register
-  TIFR1 = _BV(ICF1);
-#ifndef DEBUG
-  // Hadle TX/RX
-  afsk.doTXRX();
-#endif
-}
 
 /**
   Main Arduino setup function
@@ -51,25 +39,28 @@ void setup() {
   Serial.begin(115200);
 
   // Define and configure the modem
-  afsk.init(BELL103, &cfg);
+  //afsk.init(BELL103, &cfg);
 
   // All LEDs on
-  afsk.setLeds(ON);
+  //afsk.setLeds(ON);
 
   // Banner
   hayes.banner();
 
   // All LEDs off
   delay(1000);
-  afsk.setLeds(OFF);
+  //afsk.setLeds(OFF);
 }
 
 /**
   Main Arduino loop
 */
 void loop() {
+  // Handle TX/RX
+  conn.doTXRX();
+
   // Check the serial port and handle data
-  uint8_t sioResult = afsk.doSIO();
+  uint8_t sioResult = conn.doSIO();
   if      (sioResult == 255)  hayes.doSIO();
   else if (sioResult != 254)  hayes.doSIO(sioResult);
 }

@@ -21,7 +21,7 @@
 
 Profile profile;
 
-HAYES::HAYES(CFG_t *conf, AFSK *afsk): cfg(conf), afskModem(afsk) {
+HAYES::HAYES(CFG_t *conf, CONN *conn): cfg(conf), wifiConn(conn) {
   // Try to restore the profile or use factory defaults
   profile.init(cfg);
 }
@@ -95,7 +95,7 @@ void HAYES::getUptime(uint32_t upt, char *buf, size_t len) {
   @param len maximum to parse, 0 for no limit
   @return the integer found or zero, also set the cmdResult
 */
-int16_t HAYES::getInteger(char* buf, int8_t idx, uint8_t len = 32) {
+int16_t HAYES::getInteger(char* buf, int8_t idx, uint8_t len) {
   int16_t result  = 0;      // The result
   bool    isNeg   = false;  // Negative flag
   uint8_t sdx     = 0;      // Start index
@@ -394,7 +394,7 @@ uint8_t HAYES::doSIO(uint8_t rcRemote) {
     if (rcRemote == RC_NO_CARRIER) {
       // If NO CARRIER, show the call time
       char buf[20];
-      getUptime(afskModem->callTime(), buf, 20);
+      getUptime(wifiConn->callTime(), buf, 20);
       printResult(rcRemote, buf);
     }
     else if (rcRemote == RC_RING and \
@@ -418,7 +418,7 @@ uint8_t HAYES::doSIO(uint8_t rcRemote) {
       // Just print the remote result
       printResult(rcRemote);
     // Bail out
-    return;
+    return 0;
   }
 
   // Read from serial only if there is room in buffer
@@ -585,17 +585,17 @@ void HAYES::dispatch() {
     case 'A':
       cmdResult = RC_ERROR;
       // Phase 0: Clear any ringing counters and signals
-      afskModem->clearRing();
+      wifiConn->clearRing();
       // Phase 1: Set direction
-      afskModem->setDirection(ANSWERING);
+      wifiConn->setDirection(ANSWERING);
       // Phase 2: Go online
-      afskModem->setLine(ON);
+      wifiConn->setLine(ON);
       // Phase 2: Answering carrier on (after a while)
-      afskModem->setTxCarrier(ON);
+      wifiConn->setTxCarrier(ON);
       // Phase 3: Wait for originating carrier for S7 seconds
-      if (afskModem->getRxCarrier()) {
+      if (wifiConn->getRxCarrier()) {
         // Phase 4: Data mode if carrier found
-        afskModem->setMode(DATA_MODE);
+        wifiConn->setMode(DATA_MODE);
         if (cfg->selcpm == 0)
           cmdResult = RC_CONNECT;
         else
@@ -603,7 +603,7 @@ void HAYES::dispatch() {
       }
       else {
         // No carrier, go offline
-        afskModem->setLine(OFF);
+        wifiConn->setLine(OFF);
         cmdResult = RC_NO_CARRIER;
       }
       // Disable result codes if ATQ2
@@ -621,12 +621,16 @@ void HAYES::dispatch() {
         if (cmdResult == RC_OK)
           // Change the modem type
           switch (cfg->compro) {
-            case 15:  afskModem->setModemType(V_21);    break;
-            case 16:  afskModem->setModemType(BELL103); break;
+            case 15:
+              //FIXME wifiConn->setModemType(V_21);
+              break;
+            case 16:
+              //FIXME wifiConn->setModemType(BELL103);
+              break;
             // Default to Bell 103
             default:
               cfg->compro = 16;
-              afskModem->setModemType(BELL103);
+              //FIXME wifiConn->setModemType(BELL103);
               cmdResult = RC_ERROR;
           }
       }
@@ -640,7 +644,7 @@ void HAYES::dispatch() {
         cmdPrint(cfg->txcarr);
       else {
         cfg->txcarr = getValidDigit(0, 1, cfg->txcarr);
-        afskModem->setTxCarrier(ON);
+        wifiConn->setTxCarrier(ON);
       }
       break;
 
@@ -654,21 +658,21 @@ void HAYES::dispatch() {
       // Phase 1: Get the dial number and parameters
       if (getDialNumber(dialNumber, sizeof(dialNumber) - 1)) {
         // Phase 2: Set direction
-        afskModem->setDirection(ORIGINATING, dialReverse);
+        wifiConn->setDirection(ORIGINATING, dialReverse);
         // Phase 3: Go online
-        afskModem->setLine(ON);
+        wifiConn->setLine(ON);
         // Phase 4: Wait for dialtone / busy (NO_DIALTONE / BUSY)
         // Phase 5: Dial: DTMF/Pulses
-        if (afskModem->dial(dialNumber)) {
+        if (wifiConn->dial(dialNumber)) {
           // Phase 6: Wait for incoming carrier for S7 seconds
-          if (afskModem->getRxCarrier()) {
+          if (wifiConn->getRxCarrier()) {
             // Phase 7: Enable outgoing carrier
-            afskModem->setTxCarrier(ON);
+            wifiConn->setTxCarrier(ON);
             // Phase 8: Enter data mode or stay in command mode
             if (dialCmdMode)
               cmdResult = RC_OK;
             else {
-              afskModem->setMode(DATA_MODE);
+              wifiConn->setMode(DATA_MODE);
               if (cfg->selcpm == 0)
                 cmdResult = RC_CONNECT;
               else
@@ -677,7 +681,7 @@ void HAYES::dispatch() {
           }
           else {
             // No carrier, go offline
-            afskModem->setLine(OFF);
+            wifiConn->setLine(OFF);
             cmdResult = RC_NO_CARRIER;
           }
         }
@@ -714,10 +718,10 @@ void HAYES::dispatch() {
     // ATH0  force line on hook (offline)
     // ATH1  force line off hook (online)
     case 'H':
-      afskModem->setLine(getValidDigit(0, 1, 0));
-      if (afskModem->getLine() == OFF) {
+      wifiConn->setLine(getValidDigit(0, 1, 0));
+      if (wifiConn->getLine() == OFF) {
         char buf[20];
-        uint32_t upt = afskModem->callTime();
+        uint32_t upt = wifiConn->callTime();
         if (upt > 0) {
           getUptime(upt, buf, 20);
           printResult(RC_NO_CARRIER, buf);
@@ -818,9 +822,9 @@ void HAYES::dispatch() {
     // ATO1  stay in command mode (nonsense)
     case 'O':
       // Data mode or command mode
-      afskModem->setMode(getValidDigit(0, 1, 0) == 0 ? DATA_MODE : COMMAND_MODE);
+      wifiConn->setMode(getValidDigit(0, 1, 0) == 0 ? DATA_MODE : COMMAND_MODE);
       // Return CONNECT if back to data mode
-      cmdResult = afskModem->getMode() == DATA_MODE ? RC_CONNECT : RC_NONE;
+      cmdResult = wifiConn->getMode() == DATA_MODE ? RC_CONNECT : RC_NONE;
       break;
 
     // ATP Use pulse dialing for the next call

@@ -30,7 +30,7 @@
 #include <Arduino.h>
 
 #include "config.h"
-#include "afsk.h"
+#include "conn.h"
 
 // Result codes
 enum RESULT_CODES {RC_OK, RC_CONNECT, RC_RING, RC_NO_CARRIER, RC_ERROR,
@@ -74,7 +74,7 @@ const char atHelp[] PROGMEM = {"AT-Commands\r\n"
 
 class HAYES {
   public:
-    HAYES(CFG_t *conf, AFSK *afsk);
+    HAYES(CFG_t *conf, CONN *conn);
     ~HAYES();
 
     void printCRLF();
@@ -98,7 +98,7 @@ class HAYES {
 
   private:
     CFG_t *cfg;
-    AFSK  *afskModem;
+    CONN  *wifiConn;
 
     // Input buffer
     char buf[MAX_INPUT_SIZE];
@@ -132,7 +132,6 @@ class HAYES {
 
 
     void    showProfile(CFG_t *conf);
-
 };
 
 #endif /* HAYES_H */
