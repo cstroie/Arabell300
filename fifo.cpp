@@ -56,7 +56,7 @@ void FIFO::clear() {
 }
 
 bool FIFO::in(uint8_t x) {
-  if (not this->_full()) {
+  if (not this->full()) {
     buf[i_in] = x;
     i_in = (i_in + 1) & _mask;
     return true;
