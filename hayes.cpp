@@ -22,8 +22,6 @@
 Profile profile;
 
 HAYES::HAYES(CFG_t *conf, CONN *conn): cfg(conf), wifiConn(conn) {
-  // Try to restore the profile or use factory defaults
-  profile.init(cfg);
 }
 
 HAYES::~HAYES() {
@@ -50,6 +48,12 @@ void HAYES::print_P(const char *str, bool newline) {
     if (val) Serial.write(val);
   } while (val);
   if (newline) printCRLF();
+}
+
+void HAYES::init() {
+  // Try to restore the profile or use factory defaults
+  profile.init(cfg);
+  this->banner();
 }
 
 /**
@@ -422,7 +426,7 @@ uint8_t HAYES::doSIO(uint8_t rcRemote) {
   }
 
   // Read from serial only if there is room in buffer
-  if (len < MAX_INPUT_SIZE - 1) {
+  if (len < MAX_INPUT_SIZE - 1 and Serial.available() > 0) {
     c = Serial.read();
     // Check if we have a valid character
     if (c >= 0) {
@@ -575,10 +579,12 @@ void HAYES::dispatch() {
     case '\0':
       break;
 
-    // AT? Print the long help message
+    // AT? Print the long help message, only for this syntax
     case '?':
-      print_P(atHelp, false);
-      cmdResult = RC_OK;
+      if (idx == 3) {
+        print_P(atHelp, false);
+        cmdResult = RC_OK;
+      }
       break;
 
     // ATA Answer incoming call
@@ -623,14 +629,17 @@ void HAYES::dispatch() {
           switch (cfg->compro) {
             case 15:
               //FIXME wifiConn->setModemType(V_21);
+              wifiConn->setModemType();
               break;
             case 16:
               //FIXME wifiConn->setModemType(BELL103);
+              wifiConn->setModemType();
               break;
             // Default to Bell 103
             default:
               cfg->compro = 16;
               //FIXME wifiConn->setModemType(BELL103);
+              wifiConn->setModemType();
               cmdResult = RC_ERROR;
           }
       }
@@ -896,10 +905,8 @@ void HAYES::dispatch() {
     case 'Z':
       // No more response messages
       cmdResult = RC_NONE;
-      wdt_enable(WDTO_250MS);
-      // Wait for the prescaller time to expire
-      // without sending the reset signal
-      while (true) {};
+      ESP.reset();
+      delay(5000);
       break;
 
     // Standard '&' extension
@@ -1073,7 +1080,7 @@ void HAYES::dispatch() {
           else if (buf[idx + 1] == '=') {
             // If the next char is '=', the slot is specified before it
             // and the phone number starts at the next char
-            option = getValidDigit(0, 3, 0);
+            option = getValidDigit(0, eePhoneNums - 1, 0);
             idx += 2;
           }
           else

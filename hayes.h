@@ -79,6 +79,8 @@ class HAYES {
 
     void printCRLF();
     void print_P(const char *str, bool newline = false);
+
+    void init();
     void banner();
 
     void getUptime(uint32_t secs, char *buf, size_t len);
