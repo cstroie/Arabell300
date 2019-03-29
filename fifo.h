@@ -1,7 +1,7 @@
 /**
   fifo.h - Simple FIFO
 
-  Copyright (C) 2018 Costin STROIE <costinstroie@eridu.eu.org>
+  Copyright (C) 2019 Costin STROIE <costinstroie@eridu.eu.org>
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -41,14 +41,6 @@ class FIFO {
     uint8_t _mask;
     uint8_t i_in  = 0;
     uint8_t i_out = 0;
-
-    bool    _full();
-    bool    _empty();
-    uint8_t _len();
-    void    _clear();
-    bool    _in(uint8_t x);
-    uint8_t _out();
-    uint8_t _peek();
 };
 
 #endif /* FIFO_H */
