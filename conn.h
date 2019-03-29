@@ -28,12 +28,9 @@
 //#define DEBUG_RX_LVL
 
 #include <Arduino.h>
-#include <avr/wdt.h>
 
 #include "config.h"
 #include "fifo.h"
-#include "wave.h"
-#include "dtmf.h"
 
 // Mark and space bits
 enum BIT {SPACE, MARK};

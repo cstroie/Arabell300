@@ -18,14 +18,14 @@
 */
 
 #include "config.h"
-#include "afsk.h"
+#include "conn.h"
 #include "hayes.h"
 
 // Persistent modem configuration
 CFG_t cfg;
 
 // The modem and all its related runtime configuration
-AFSK afsk;
+CONN conn;
 
 // The AT-Hayes command interface
 HAYES hayes(&cfg, &afsk);
@@ -48,12 +48,7 @@ ISR(ADC_vect) {
 */
 void setup() {
   // Serial port configuration
-#ifdef DEBUG_EE
   Serial.begin(115200);
-  e2hex();
-#else
-  Serial.begin(300);
-#endif
 
   // Define and configure the modem
   afsk.init(BELL103, &cfg);
@@ -77,59 +72,4 @@ void loop() {
   uint8_t sioResult = afsk.doSIO();
   if      (sioResult == 255)  hayes.doSIO();
   else if (sioResult != 254)  hayes.doSIO(sioResult);
-
-#ifdef DEBUG_RX_LVL
-  static uint32_t next = millis();
-  if (millis() > next) {
-    Serial.println(afsk.inLevel);
-    next += 8 * 1000 / 300;
-  }
-#endif
-
-#ifdef DEBUG
-  afsk.simFeed();
-  afsk.simPrint();
-#endif
 }
-
-#ifdef DEBUG_EE
-void e2hex() {
-  char buf[16];
-  char val[4];
-  uint8_t data;
-  // Start with a new line
-  Serial.print("\r\n");
-  // All EEPROM bytes
-  for (uint16_t addr = 0; addr <= E2END;) {
-    // Init the buffer
-    memset(buf, 0, 16);
-    // Use the buffer to display the address
-    sprintf_P(buf, PSTR("%04X: "), addr);
-    Serial.print(buf);
-    // Iterate over bytes, 2 sets of 8 bytes
-    for (uint8_t set = 0; set < 2; set++) {
-      for (uint8_t byt = 0; byt < 8; byt++) {
-        // Read EEPROM
-        data = EEPROM.read(addr);
-        // Prepare and print the hex dump
-        sprintf_P(val, PSTR("%02X "), data);
-        Serial.print(val);
-        // Prepare the ASCII dump
-        if (data < 32 or data > 127)
-          data = '.';
-        buf[addr & 0x0F] = data;
-        // Increment the address
-        addr++;
-      }
-      // Print a separator
-      Serial.write(' ');
-    }
-    // Print the ASCII column
-    for (uint8_t idx = 0; idx < 16; idx++) {
-      Serial.write(buf[idx]);
-    }
-    // New line
-    Serial.print("\r\n");
-  }
-}
-#endif
