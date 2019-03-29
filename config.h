@@ -42,8 +42,8 @@ const char DATE[]     PROGMEM = __DATE__;
 const uint16_t  eeAddress   = 0x0080; // EEPROM start address for configuration store
 const uint8_t   eeProfNums  = 4;      // Number of configuration profiles to store
 const uint8_t   eeProfLen   = 32;     // Reserved profile lenght
-const uint8_t   eePhoneNums = 4;      // Number of phone numbers to store
-const uint8_t   eePhoneLen  = 32;     // Reserved phone number lenght
+const uint8_t   eePhoneNums = 8;      // Number of phone numbers to store
+const uint8_t   eePhoneLen  = 64;     // Reserved telnet address lenght
 struct CFG_t {
   union {
     struct {
