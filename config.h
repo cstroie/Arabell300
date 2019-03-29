@@ -26,8 +26,8 @@
 // Include local configuration
 #include "local.h"
 
-// Sampling frequency
-#define F_SAMPLE    9600
+// EEPROM size to use
+#define EESIZE    512
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Arabell300";
@@ -39,8 +39,8 @@ const char DATE[]     PROGMEM = __DATE__;
 
 
 // Modem configuration
-const uint16_t  eeAddress   = 0x0080; // EEPROM start address for configuration store
-const uint8_t   eeProfNums  = 4;      // Number of configuration profiles to store
+const uint16_t  eeAddress   = 0x0000; // EEPROM start address for configuration store
+const uint8_t   eeProfNums  = 2;      // Number of configuration profiles to store
 const uint8_t   eeProfLen   = 32;     // Reserved profile lenght
 const uint8_t   eePhoneNums = 8;      // Number of phone numbers to store
 const uint8_t   eePhoneLen  = 64;     // Reserved telnet address lenght
@@ -48,21 +48,25 @@ struct CFG_t {
   union {
     struct {
       uint8_t crc8  : 8;  // CRC8 of the following data
+
       uint8_t compro: 5;  // ATB Select communication protocol
       uint8_t txcarr: 1;  // ATC Keep a carrier going when transmitting
       uint8_t cmecho: 1;  // ATE Local command mode echo
       uint8_t dtecho: 1;  // ATF Half/Full duplex and local data mode echo
+
       uint8_t spklvl: 2;  // ATL Speaker volume level
       uint8_t spkmod: 2;  // ATM Speaker mode
       uint8_t quiet : 2;  // ATQ Quiet mode
       uint8_t verbal: 1;  // ATV Verbose mode
       uint8_t selcpm: 1;  // ATX Select call progress method
+
       uint8_t dialpt: 1;  // ATP/T Select pulse/tone dialing
       uint8_t revans: 1;  // AT&A Reverse answering frequencies
       uint8_t dcdopt: 1;  // AT&C DCD option selection
       uint8_t dtropt: 2;  // AT&D DTR option selection
-      uint8_t jcksel: 1;  // AT&J Jack type selection
       uint8_t flwctr: 3;  // AT&K Flow control selection
+
+      uint8_t jcksel: 1;  // AT&J Jack type selection
       uint8_t lnetpe: 1;  // AT&L Line type slection
       uint8_t plsrto: 2;  // AT&P Make/Break ratio for pulse dialing
       uint8_t rtsopt: 1;  // AT&R RTS/CTS option selection
