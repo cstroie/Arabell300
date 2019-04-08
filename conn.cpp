@@ -548,6 +548,16 @@ bool CONN::dial(char *phone) {
     }
     }
   */
+
+  TCPClient.setTimeout(cfg->sregs[7] * 1000UL);
+  if (TCPClient.connect("telehack.com", 23)) {
+    this->setLine(ON);
+  }
+  else {
+    this->setLine(OFF);
+  }
+
+
   return result;
 }
 

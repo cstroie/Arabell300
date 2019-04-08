@@ -21,7 +21,7 @@
 #define CONN_H
 
 #include <Arduino.h>
-
+#include <ESP8266WiFi.h>
 #include "config.h"
 
 // Connection direction
@@ -83,6 +83,8 @@ class CONN {
     uint32_t connCDT ; // RX carrier time out
 
     void initHW();
+
+    WiFiClient TCPClient;
 };
 
 
