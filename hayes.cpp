@@ -430,8 +430,12 @@ uint8_t HAYES::doSIO(uint8_t rcRemote) {
     c = Serial.read();
     // Check if we have a valid character
     if (c >= 0) {
-      // Uppercase
-      c = toupper(c);
+      // No more uppercase after an equal sign is found
+      if (c == '=')
+        doUpper = false;
+      // Uppercase if we can do it
+      if (doUpper)
+        c = toupper(c);
       // Local terminal command mode echo
       if (cfg->cmecho)
         Serial.write(c);
@@ -514,6 +518,8 @@ uint8_t HAYES::doSIO(uint8_t rcRemote) {
         }
         // Reset the buffer length
         len = 0;
+        // Do uppercase again
+        doUpper = true;
       }
     }
   }
@@ -1131,6 +1137,94 @@ void HAYES::dispatch() {
         else
           // Anything else is ERROR
           cmdResult = RC_ERROR;
+        break;
+      }
+
+      // AT+CWJAP connect to AP set the device for different modes (only data supported)
+      // AT+CWJAP?              show the connected AP
+      // AT+CWJAP="ssid","pass" set the AP SSID and password
+      else if (strncmp(&buf[idx], "CWJAP", 5) == 0) {
+        idx += 5;
+        // Show the connected SSID
+        if (buf[idx] == '?') {
+          Serial.printf_P(PSTR("+CWJAP:\"%s\""), WiFi.SSID().c_str());
+          if (WiFi.isConnected()) {
+            Serial.printf_P(PSTR("+CWJAP:\"%s\""), WiFi.SSID().c_str());
+            printCRLF();
+            // Response code OK
+            cmdResult = RC_OK;
+          }
+          else
+            // Response code is ERROR
+            cmdResult = RC_ERROR;
+        }
+        else if (buf[idx] == '=') {
+          char ssid[WL_SSID_MAX_LENGTH + 1] = "";
+          char pass[WL_WPA_KEY_MAX_LENGTH + 1] = "";
+          // Assume ERROR
+          cmdResult = RC_ERROR;
+          // Search the buffer
+          char *pch;
+          pch = strtok(buf + idx + 1, "\",");
+          if (pch != NULL) {
+            // Keep the SSID
+            strncpy(ssid, pch, WL_SSID_MAX_LENGTH);
+            // Search again
+            pch = strtok(NULL, "\",");
+            if (pch != NULL) {
+              // Keep the password
+              strncpy(pass, pch, WL_WPA_KEY_MAX_LENGTH);
+              // Response code OK
+              cmdResult = RC_OK;
+
+              // FIXME
+              Serial.printf("%s\n", ssid);
+              Serial.printf("%s\n", pass);
+              // Connect to the network
+              WiFi.begin(ssid, pass);
+
+              while (WiFi.status() != WL_CONNECTED) {
+                delay(500);
+                Serial.print(".");
+              }
+
+
+            }
+          }
+        }
+        else
+          // Anything else is ERROR
+          cmdResult = RC_ERROR;
+        break;
+      }
+
+      // AT+CWLAP Lists available APs
+      else if (strncmp(&buf[idx], "CWLAP", 5) == 0) {
+        idx += 5;
+        // Start scanning the networks
+        int nets = WiFi.scanNetworks(false, false);
+        if (nets > 0) {
+          String ssid;
+          uint8_t encryptionType;
+          int32_t RSSI;
+          uint8_t* BSSID;
+          int32_t channel;
+          bool isHidden;
+          // Show a CWLAP-compatible list
+          for (int i = 0; i < nets; i++) {
+            WiFi.getNetworkInfo(i, ssid, encryptionType, RSSI, BSSID, channel, isHidden);
+            Serial.printf_P(PSTR("+CWLAP:(%d,\"%s\",%d,\"%02X:%02X:%02X:%02X:%02X:%02X\",%d)"),
+                            encryptionType, ssid.c_str(), RSSI, BSSID[0], BSSID[1], BSSID[2], BSSID[3], BSSID[4], BSSID[5], channel);
+            printCRLF();
+          }
+          // Response code OK
+          cmdResult = RC_OK;
+        }
+        else
+          // Anything else is ERROR
+          cmdResult = RC_ERROR;
+        // Clear the scan results
+        WiFi.scanDelete();
         break;
       }
       break;

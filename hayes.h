@@ -21,14 +21,14 @@
 #define HAYES_H
 
 // Maximum input buffer size
-#define MAX_INPUT_SIZE 65
+#define MAX_INPUT_SIZE 128
 
 // Several Hayes related globals
 #define HAYES_NUM_ERROR -128
 
 
 #include <Arduino.h>
-
+#include "ESP8266WiFi.h"
 #include "config.h"
 #include "conn.h"
 
@@ -101,6 +101,9 @@ class HAYES {
   private:
     CFG_t *cfg;
     CONN  *wifiConn;
+
+    // Uppercase input characters
+    bool doUpper = true;
 
     // Input buffer
     char buf[MAX_INPUT_SIZE];
