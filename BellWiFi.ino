@@ -17,8 +17,11 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Configuration
 #include "config.h"
+// Connection
 #include "conn.h"
+// AT Hayes commands
 #include "hayes.h"
 
 // Persistent modem configuration
@@ -35,6 +38,13 @@ HAYES hayes(&cfg, &conn);
   Main Arduino setup function
 */
 void setup() {
+  // Do not save the last WiFi settings
+  WiFi.persistent(false);
+  // Set the host name
+  WiFi.hostname("BellWiFi");
+  // Set the mode
+  WiFi.mode(WIFI_STA);
+
   // Serial port configuration
   Serial.begin(115200);
   delay(100);

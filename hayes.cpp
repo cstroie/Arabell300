@@ -1180,6 +1180,10 @@ void HAYES::dispatch() {
               // FIXME
               Serial.printf("%s\n", ssid);
               Serial.printf("%s\n", pass);
+
+              // Store the credentials
+              profile.wfSet(ssid, pass);
+
               // Connect to the network
               WiFi.begin(ssid, pass);
 

@@ -21,13 +21,14 @@
 #define CONFIG_H
 
 #include <Arduino.h>
+#include <ESP8266WiFi.h>
 #include <EEPROM.h>
 
 // Include local configuration
 #include "local.h"
 
 // EEPROM size to use
-#define EESIZE    512
+#define EESIZE    1024
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Arabell300";
@@ -38,12 +39,18 @@ const char FTRS[]     PROGMEM = "a0020400080004000\r\nb000008\r\nr10010000000000
 const char DATE[]     PROGMEM = __DATE__;
 
 
-// Modem configuration
-const uint16_t  eeAddress   = 0x0000; // EEPROM start address for configuration store
+// EEPROM address for main configuration
+const uint16_t  eeAddrCfg   = 0x0000;
 const uint8_t   eeProfNums  = 2;      // Number of configuration profiles to store
 const uint8_t   eeProfLen   = 32;     // Reserved profile lenght
+// EEPROM address for WiFi credentials
+const uint16_t  eeAddrWiFi  = eeAddrCfg + eeProfNums * eeProfLen;
+// EEPROM address for phonebook
+const uint16_t  eeAddrPBook = eeAddrWiFi + WL_SSID_MAX_LENGTH + WL_WPA_KEY_MAX_LENGTH;
 const uint8_t   eePhoneNums = 8;      // Number of phone numbers to store
 const uint8_t   eePhoneLen  = 64;     // Reserved telnet address lenght
+
+// Modem configuration
 struct CFG_t {
   union {
     struct {
@@ -116,6 +123,10 @@ class Profile {
     // Phone numbers storage
     uint8_t pbGet(char *phone, uint8_t slot);
     void pbSet(char *phone, uint8_t slot);
+
+    // WiFi credentials
+    bool wfGet(char *ssid, char *pass);
+    void wfSet(char *ssid, char *pass);
 
   private:
     uint8_t crc(CFG_t *cfg);

@@ -102,7 +102,7 @@ bool Profile::write(CFG_t *cfg, uint8_t slot) {
   EEPROM.begin(EESIZE);
   // Read the data from EEPROM into the temporary structure
   for (uint8_t i = 0; i < eeProfLen; i++)
-    cfgTemp.data[i] = EEPROM.read(eeAddress + slot * eeProfLen + i);
+    cfgTemp.data[i] = EEPROM.read(eeAddrCfg + slot * eeProfLen + i);
   // Compute the CRC8 checksum of the read data
   uint8_t crc8 = this->crc(&cfgTemp);
   // Compute the CRC8 checksum of the actual data, make sure S1 is zero
@@ -112,7 +112,7 @@ bool Profile::write(CFG_t *cfg, uint8_t slot) {
   if (not this->equal(cfg, &cfgTemp) or (cfgTemp.crc8 != crc8))
     // Write the data to EEPROM
     for (uint8_t i = 0; i < eeProfLen; i++)
-      EEPROM.write(eeAddress + slot * eeProfLen + i, cfg->data[i]);
+      EEPROM.write(eeAddrCfg + slot * eeProfLen + i, cfg->data[i]);
   // Close EEPROM
   EEPROM.end();
   // Always return true, even if data is not written
@@ -134,7 +134,7 @@ bool Profile::read(CFG_t *cfg, uint8_t slot, bool useDefaults) {
   EEPROM.begin(EESIZE);
   // Read the data from EEPROM into the temporary structure
   for (uint8_t i = 0; i < eeProfLen; i++)
-    cfgTemp.data[i] = EEPROM.read(eeAddress + slot * eeProfLen + i);
+    cfgTemp.data[i] = EEPROM.read(eeAddrCfg + slot * eeProfLen + i);
   // Compute the CRC8 checksum of the read data
   uint8_t crc8 = this->crc(&cfgTemp);
   // And compare with the read crc8 checksum, also check S1 and S2
@@ -220,7 +220,7 @@ uint8_t Profile::pbGet(char *phone, uint8_t slot) {
   // Open EEPROM
   EEPROM.begin(EESIZE);
   // Compute the eeprom address
-  uint16_t address = eeAddress + eeProfNums * eeProfLen + slot * eePhoneLen;
+  uint16_t address = eeAddrPBook + slot * eePhoneLen;
   // Get the chars
   for (uint8_t i = 0; i < eePhoneLen; i++) {
     phone[i] = EEPROM.read(address + i);
@@ -244,12 +244,60 @@ void Profile::pbSet(char *phone, uint8_t slot) {
   // Open EEPROM
   EEPROM.begin(EESIZE);
   // Compute the eeprom address
-  uint16_t address = eeAddress + eeProfNums * eeProfLen + slot * eePhoneLen;
+  uint16_t address = eeAddrPBook + slot * eePhoneLen;
   // Store the chars only if changed
   for (uint8_t i = 0; i < eePhoneLen; i++) {
     if (EEPROM.read(address + i) != phone[i])
       EEPROM.write(address + i, phone[i]);
     if (phone[i] == '\0') break;
+  }
+  // Close EEPROM
+  EEPROM.end();
+}
+
+/**
+  Get the stored WiFi credentials
+
+  @param ssid the WiFi SSID
+  @param pass the WiFi password
+  @return success result
+*/
+bool Profile::wfGet(char *ssid, char *pass) {
+  // Open EEPROM
+  EEPROM.begin(EESIZE);
+  // Get the ssid
+  for (uint8_t i = 0; i < WL_SSID_MAX_LENGTH; i++)
+    ssid[i] = EEPROM.read(eeAddrWiFi + i);
+  ssid[WL_SSID_MAX_LENGTH] = '\0';
+  // Get the password
+  for (uint8_t i = 0; i < WL_WPA_KEY_MAX_LENGTH; i++)
+    pass[i] = EEPROM.read(eeAddrWiFi + WL_SSID_MAX_LENGTH + i);
+  pass[WL_WPA_KEY_MAX_LENGTH] = '\0';
+  // Close EEPROM
+  EEPROM.end();
+  return (ssid[0] >= ' ' and ssid[0] <= '~' and
+          pass[0] >= ' ' and pass[0] <= '~');
+}
+
+/**
+  Store the WiFi credentials
+
+  @param ssid the WiFi SSID
+  @param pass the WiFi password
+*/
+void Profile::wfSet(char *ssid, char *pass) {
+  // Open EEPROM
+  EEPROM.begin(EESIZE);
+
+  // Set the ssid
+  for (uint8_t i = 0; i < WL_SSID_MAX_LENGTH; i++) {
+    EEPROM.write(eeAddrWiFi + i, ssid[i]);
+    if (ssid[i] == '\0') break;
+  }
+  // Set the password
+  for (uint8_t i = 0; i < WL_WPA_KEY_MAX_LENGTH; i++) {
+    EEPROM.write(eeAddrWiFi + WL_SSID_MAX_LENGTH + i, pass[i]);
+    if (pass[i] == '\0') break;
   }
   // Close EEPROM
   EEPROM.end();
