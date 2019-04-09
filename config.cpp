@@ -288,7 +288,6 @@ bool Profile::wfGet(char *ssid, char *pass) {
 void Profile::wfSet(char *ssid, char *pass) {
   // Open EEPROM
   EEPROM.begin(EESIZE);
-
   // Set the ssid
   for (uint8_t i = 0; i < WL_SSID_MAX_LENGTH; i++) {
     EEPROM.write(eeAddrWiFi + i, ssid[i]);

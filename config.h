@@ -92,7 +92,7 @@ const uint8_t sRegs[16] PROGMEM = {0,     //  0 Rings to Auto-Answer
                                    '\r',  //  3 Carriage Return Character
                                    '\n',  //  4 Line Feed Character
                                    '\b',  //  5 Backspace Character
-                                   2,     //  6 Wait Time for Dial Tone
+                                   30,    //  6 Wait Time for Dial Tone
                                    50,    //  7 Wait Time for Carrier
                                    2,     //  8 Pause Time for Dial Delay Modifier
                                    6,     //  9 Carrier Detect Response Time (tenths of a second)
