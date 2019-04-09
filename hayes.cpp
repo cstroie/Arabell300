@@ -733,8 +733,8 @@ void HAYES::dispatch() {
     // ATH0  force line on hook (offline)
     // ATH1  force line off hook (online)
     case 'H':
-      wifiConn->setLine(getValidDigit(0, 1, 0));
-      if (wifiConn->getLine() == OFF) {
+      cmdResult = wifiConn->setLine(getValidDigit(0, 1, 0));
+      if (cmdResult == RC_NO_CARRIER) {
         char buf[20];
         uint32_t upt = wifiConn->callTime();
         if (upt > 0) {
@@ -1148,15 +1148,7 @@ void HAYES::dispatch() {
         // Show the connected SSID
         if (buf[idx] == '?') {
           Serial.printf_P(PSTR("+CWJAP:\"%s\""), WiFi.SSID().c_str());
-          if (WiFi.isConnected()) {
-            Serial.printf_P(PSTR("+CWJAP:\"%s\""), WiFi.SSID().c_str());
-            printCRLF();
-            // Response code OK
-            cmdResult = RC_OK;
-          }
-          else
-            // Response code is ERROR
-            cmdResult = RC_ERROR;
+          cmdResult = WiFi.isConnected() ? RC_OK : RC_ERROR;
         }
         else if (buf[idx] == '=') {
           char ssid[WL_SSID_MAX_LENGTH + 1] = "";
@@ -1177,22 +1169,11 @@ void HAYES::dispatch() {
               // Response code OK
               cmdResult = RC_OK;
 
-              // FIXME
-              Serial.printf("%s\n", ssid);
-              Serial.printf("%s\n", pass);
-
               // Store the credentials
               profile.wfSet(ssid, pass);
 
               // Connect to the network
-              WiFi.begin(ssid, pass);
-
-              while (WiFi.status() != WL_CONNECTED) {
-                delay(500);
-                Serial.print(".");
-              }
-
-
+              printResult(wifiConn->setLine(ON));
             }
           }
         }

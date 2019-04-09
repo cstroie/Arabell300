@@ -42,7 +42,7 @@ class CONN {
 
     void setModemType();
     void setDirection(uint8_t dir, uint8_t rev = OFF);
-    void setLine(uint8_t online);
+    uint8_t setLine(uint8_t online);
     bool getLine();
     void setMode(uint8_t mode);
     bool getMode();

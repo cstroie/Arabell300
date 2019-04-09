@@ -380,13 +380,17 @@ void CONN::setDirection(uint8_t dir, uint8_t rev) {
 }
 
 /**
-  Set the online status
+  Set the online status.
+  Connect and disconnect WiFi
 
   @param online online status
+  @return line setting succeded or not
 */
-void CONN::setLine(uint8_t online) {
+uint8_t CONN::setLine(uint8_t online) {
   // Keep the online status
   onLine = online;
+  // The result
+  uint8_t result = 0; // OK
 
   if (online == OFF) {
     // OH led off
@@ -397,8 +401,13 @@ void CONN::setLine(uint8_t online) {
     // FIXME
     //if (cfg->dsropt == OFF)
     //  PORTD &= ~_BV(PORTD5);
+
+    // Disconnect
+    WiFi.disconnect();
     // Command mode
     this->setMode(COMMAND_MODE);
+    // Result must be NO CARRIER
+    result = 3;
   }
   else {
     // OH led on
@@ -407,7 +416,28 @@ void CONN::setLine(uint8_t online) {
     // FIXME
     // if (cfg->dsropt == OFF)
     //  PORTD |= _BV(PORTD5);
+    char ssid[WL_SSID_MAX_LENGTH + 1] = "";
+    char pass[WL_WPA_KEY_MAX_LENGTH + 1] = "";
+    // Get the credentials
+    Profile profile;
+    if (profile.wfGet(ssid, pass)) {
+      // Set the timeout
+      uint32_t timeout = millis() + cfg->sregs[6] * 1000UL;
+      // Connect to the network
+      WiFi.begin(ssid, pass);
+      // Wait for dialtone (connection)
+      while (WiFi.status() != WL_CONNECTED and
+             millis() < timeout)
+        delay(100);
+      // Result is OK or NO DIALTONE
+      result = WiFi.isConnected() ? 0 : 6;
+    }
+    else
+      // Result is ERROR
+      result = 4;
   }
+  // Return the result
+  return result;
 }
 
 /**
