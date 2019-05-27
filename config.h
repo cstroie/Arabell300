@@ -31,7 +31,7 @@
 
 // Software name and vesion
 const char DEVNAME[]  PROGMEM = "Arabell300";
-const char VERSION[]  PROGMEM = "v3.55";
+const char VERSION[]  PROGMEM = "v3.56";
 const char AUTHOR[]   PROGMEM = "Costin Stroie <costinstroie@eridu.eu.org>";
 const char DESCRP[]   PROGMEM = "Arduino based Bell 103 and ITU V.21 AFSK modem";
 const char FTRS[]     PROGMEM = "a0020400080004000\r\nb000008\r\nr1001000000000000";
@@ -42,7 +42,7 @@ const char DATE[]     PROGMEM = __DATE__;
 const uint16_t  eeAddress   = 0x0080; // EEPROM start address for configuration store
 const uint8_t   eeProfNums  = 4;      // Number of configuration profiles to store
 const uint8_t   eeProfLen   = 32;     // Reserved profile lenght
-const uint8_t   eePhoneNums = 4;      // Number of phone numbers to store
+const uint8_t   eePhoneNums = 8;      // Number of phone numbers to store
 const uint8_t   eePhoneLen  = 32;     // Reserved phone number lenght
 struct CFG_t {
   union {
