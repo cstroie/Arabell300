@@ -88,7 +88,7 @@ void AFSK::setModemType(AFSK_t afsk) {
 }
 
 /**
-  Compute the originating and answering samples steps
+  Compute the originating and answering samples steps, as Q6.2
 
   @param x the afsk modem to compute for
 */
@@ -163,8 +163,8 @@ void AFSK::initHW() {
   PORTD |=   _BV(PORTD2);
 
   // Set initial PWM to the first sample
-  priDAC(wave.sample(0));
-  secDAC(wave.sample(0));
+  priDAC(wave.sample((uint8_t)0));
+  secDAC(wave.sample((uint8_t)0));
 
   // Enable interrupts
   sei();
@@ -251,12 +251,12 @@ inline void AFSK::secDAC(uint8_t sample) {
 void AFSK::txHandle() {
   // Check if we are transmitting
   if (tx.active == ON or tx.carrier == ON) {
-    // First thing first: get the sample
-    txSample = wave.sample((uint8_t)((tx.idx >> 2) & 0x00FF));
+    // First thing first: get the sample, index is Q14.2
+    txSample = wave.sample(tx.idx);
     // Output the sample
     priDAC(txSample);
     // Step up the index for the next sample
-    tx.idx += fsqTX->step[tx.dtbit];
+    tx.idx = (tx.idx + fsqTX->step[tx.dtbit]) & 0x03FF;
 
     // Check if we have sent all samples for a bit
     if (tx.clk++ >= fulBit) {
@@ -871,10 +871,10 @@ uint8_t AFSK::doSIO() {
 void AFSK::spkHandle() {
   switch (cfg->spkmod) {
     case 1:
-      secDAC(txSample >> (3 - cfg->spklvl));
+      secDAC(txSample >> (4 - cfg->spklvl));
       break;
     case 2:
-      secDAC(rxSample >> (3 - cfg->spklvl));
+      secDAC(rxSample >> (4 - cfg->spklvl));
       break;
     case 3:
       secDAC(txSample >> (4 - cfg->spklvl) +
@@ -1102,7 +1102,7 @@ void AFSK::simFeed() {
   static uint16_t idx = 0;
   uint8_t bt = (millis() / 1000) % 2;
 
-  int8_t x = wave.sample((uint8_t)((idx >> 2) & 0x00FF));
+  int8_t x = wave.sample(idx);
 
   /*
     int8_t y = bs2225(x);
@@ -1123,6 +1123,7 @@ void AFSK::simFeed() {
   */
 
   //Serial.println(idx);
+  //Serial.println(x);
 
   rxHandle(x);
   idx += fsqRX->step[bt];

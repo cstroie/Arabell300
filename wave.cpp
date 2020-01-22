@@ -47,12 +47,46 @@ uint8_t WAVE::sample(uint8_t idx) {
 }
 
 /**
+  Get an instant wave sample
+
+  @param idx the wave sample index as Q14.2
+*/
+uint8_t WAVE::sample(uint16_t idx) {
+  // Get the integer part of the index
+  uint8_t idxi = (uint8_t)(idx >> 2);
+  // Get the fractional part of the index
+  uint8_t idxq = idx & 0x03;
+  // Get the first sample (at idxi)
+  uint8_t result = this->sample(idxi);
+  // Do the linear interpolation only if the fractional part
+  // is greater than zero
+  if (idxq > 0) {
+    // Get the next sample (at idxi + 1)
+    uint8_t next = this->sample(idxi++);
+    // Do the linear interpolation
+    uint8_t delta = next - result;
+    switch (idxq) {
+      case 1:
+        result = result + delta;
+        break;
+      case 2:
+        result = result + delta + delta;
+        break;
+      case 3:
+        result = next - delta;
+        break;
+    }
+  }
+  // Return the result
+  return result;
+}
+
+/**
   Compute the samples step for the given frequency, as Q6.2
 
   @param freq the frequency
   @return the step
 */
 uint8_t WAVE::getStep(uint16_t freq) {
-  return (uint8_t)((uint32_t)freq * (this->full << 2) / F_SAMPLE);
+  return (uint8_t)(((uint32_t)freq * (this->full << 3) / F_SAMPLE + 1) >> 1);
 }
-

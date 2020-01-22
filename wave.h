@@ -47,6 +47,9 @@ class WAVE {
 
     // Get the wave sample specified by index
     uint8_t sample(uint8_t idx);
+    // Get the wave sample specified by index in Q14.2 format
+    uint8_t sample(uint16_t idx);
+
     // Compute the wave steps as Q6.2
     uint8_t getStep(uint16_t freq);
 };

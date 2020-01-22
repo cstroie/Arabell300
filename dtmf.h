@@ -45,6 +45,9 @@ static const char dtmfRowsCols[ROWSCOLS][ROWSCOLS] = {
   { '*', '0', '#', 'D'}
 };
 
+// States in DTMF finite states machines
+enum DTMF_STATE {DTMF_DISB, DTMF_WAVE, DTMF_SLNC};
+
 class DTMF {
   public:
     DTMF(uint8_t pulse = 40, uint8_t pause = 40);
@@ -68,8 +71,8 @@ class DTMF {
     uint16_t rowIdx, colIdx;
     // Identified row and col
     uint8_t row, col;
-    // Wave generator status: DISABLED, WAVE, SILENCE
-    uint8_t state = 0;
+    // Wave generator status
+    uint8_t state = DTMF_DISB;
 
     // Pulse and pause length (in samples) and counter
     uint16_t lenPulse;

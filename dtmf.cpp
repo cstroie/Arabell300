@@ -26,7 +26,7 @@ DTMF::DTMF(uint8_t pulse, uint8_t pause) {
   rowIdx = 0;
   colIdx = 0;
   // Initilize the state
-  state = 0;
+  state = DTMF_DISB;
 }
 
 DTMF::~DTMF() {
@@ -38,7 +38,7 @@ DTMF::~DTMF() {
 void DTMF::setDuration(uint8_t pulse, uint8_t pause) {
   // Make the pause equal to pulse, if not specified
   if (pause == 0) pause = pulse;
-  // Compute the wave steps
+  // Compute the wave steps, as Q6.2
   for (uint8_t i = 0; i < ROWSCOLS; i++) {
     stpRows[i] = wave.getStep(frqRows[i]);
     stpCols[i] = wave.getStep(frqCols[i]);
@@ -48,27 +48,30 @@ void DTMF::setDuration(uint8_t pulse, uint8_t pause) {
   lenPause = (uint32_t)pause * F_SAMPLE / 1000;
 }
 
+/**
+  Get the next DTMF sample, according to the DTMF state
+*/
 bool DTMF::getSample() {
-  if (state == 1) {
-    sample = (wave.sample((uint8_t)((rowIdx >> 2) & 0x00FF)) >> 1) +
-             (wave.sample((uint8_t)((colIdx >> 2) & 0x00FF)) >> 1);
+  if (state == DTMF_WAVE) {
+    sample = (wave.sample(rowIdx) >> 1) +
+             (wave.sample(colIdx) >> 1);
     // Step up the indices for the next samples
-    rowIdx += stpRows[row];
-    colIdx += stpCols[col];
-    if (counter < lenPulse)
-      counter++;
-    else {
-      state = 2;
+    rowIdx = (rowIdx + stpRows[row]) & 0x03FF;
+    colIdx = (colIdx + stpCols[col]) & 0x03FF;
+    // Step up the samples counter to the pulse length
+    if (++counter > lenPulse) {
+      // Silence and reset the sample and the counter
+      state = DTMF_SLNC;
       counter = 0;
       sample = 0x80;
     }
     return true;
   }
-  else if (state == 2) {
-    if (counter < lenPause)
-      counter++;
-    else {
-      state = 0;
+  else if (state == DTMF_SLNC) {
+    // Step up the counter to pause lenght
+    if (++counter > lenPause) {
+      // Disable and reset the counter
+      state = DTMF_DISB;
       counter = 0;
     }
     return true;
@@ -76,18 +79,31 @@ bool DTMF::getSample() {
   return false;
 }
 
+/**
+  Start the DTMF generator to send a char
+
+  @param chr the character to send
+*/
 char DTMF::send(char chr) {
   if (getRowCol(chr)) {
-    state = 1;
+    // Start the wave
+    state = DTMF_WAVE;
     counter = 0;
     return chr;
   }
   else {
-    state = 0;
+    // Disable
+    state = DTMF_DISB;
     return '\0';
   }
 }
 
+/**
+  Send the buffer as DTMF tones
+
+  @param chrs the buffer to send
+  @param len the buffer length
+*/
 uint8_t DTMF::send(char *chrs, size_t len) {
   for (uint8_t i = 0; i < len; i++)
     if (chrs[i] != '\0')
@@ -96,6 +112,11 @@ uint8_t DTMF::send(char *chrs, size_t len) {
       break;
 }
 
+/**
+  Get the row and column of the character in the DTMF table
+
+  @param chr the character to test
+*/
 bool DTMF::getRowCol(char chr) {
   for (row = 0; row < ROWSCOLS; row++) {
     for (col = 0; col < ROWSCOLS; col++) {
