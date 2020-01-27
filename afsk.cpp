@@ -88,7 +88,7 @@ void AFSK::setModemType(AFSK_t afsk) {
 }
 
 /**
-  Compute the originating and answering samples steps, as Q6.2
+  Compute the originating and answering samples steps, as Q8.8
 
   @param x the afsk modem to compute for
 */
@@ -251,12 +251,12 @@ inline void AFSK::secDAC(uint8_t sample) {
 void AFSK::txHandle() {
   // Check if we are transmitting
   if (tx.active == ON or tx.carrier == ON) {
-    // First thing first: get the sample, index is Q14.2
+    // First thing first: get the sample, index is Q8.8
     txSample = wave.sample(tx.idx);
     // Output the sample
     priDAC(txSample);
     // Step up the index for the next sample
-    tx.idx = (tx.idx + fsqTX->step[tx.dtbit]) & 0x03FF;
+    tx.idx += fsqTX->step[tx.dtbit];
 
     // Check if we have sent all samples for a bit
     if (tx.clk++ >= fulBit) {

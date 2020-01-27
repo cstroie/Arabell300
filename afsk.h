@@ -55,7 +55,7 @@ struct TX_t {
   uint8_t dtbit   = MARK;     // currently transmitting data bit
   uint8_t data    = 0;        // transmitting data bits, shift out, LSB first
   uint8_t bits    = 0;        // counter of already transmitted bits
-  uint16_t idx    = 0;        // Q14.2 wave samples index (start with first sample)
+  uint16_t idx    = 0;        // Q8.8 wave samples index (start with first sample)
   uint8_t clk     = 0;        // samples counter for each bit
   uint8_t carrier = OFF;      // outgoing carrier enabled or not
 };
@@ -77,7 +77,7 @@ struct RX_t {
 // Frequencies, wave index steps, autocorrelation queue length
 struct AFSK_FSQ_t {
   uint16_t  freq[2];  // Frequencies for SPACE and MARK
-  uint8_t   step[2];  // Wave index steps for SPACE and MARK (Q6.2)
+  uint16_t  step[2];  // Wave index steps for SPACE and MARK (Q8.8)
   uint8_t   queuelen; // Autocorrelation queue length
   uint8_t   polarity; // Symbol polarity for specified queue
 };

@@ -38,7 +38,7 @@ DTMF::~DTMF() {
 void DTMF::setDuration(uint8_t pulse, uint8_t pause) {
   // Make the pause equal to pulse, if not specified
   if (pause == 0) pause = pulse;
-  // Compute the wave steps, as Q6.2
+  // Compute the wave steps, as Q8.8
   for (uint8_t i = 0; i < ROWSCOLS; i++) {
     stpRows[i] = wave.getStep(frqRows[i]);
     stpCols[i] = wave.getStep(frqCols[i]);
@@ -56,8 +56,8 @@ bool DTMF::getSample() {
     sample = (wave.sample(rowIdx) >> 1) +
              (wave.sample(colIdx) >> 1);
     // Step up the indices for the next samples
-    rowIdx = (rowIdx + stpRows[row]) & 0x03FF;
-    colIdx = (colIdx + stpCols[col]) & 0x03FF;
+    rowIdx += stpRows[row];
+    colIdx += stpCols[col];
     // Step up the samples counter to the pulse length
     if (++counter > lenPulse) {
       // Silence and reset the sample and the counter

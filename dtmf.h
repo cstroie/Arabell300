@@ -64,10 +64,10 @@ class DTMF {
   private:
     // The DTMF wave generator
     WAVE wave;
-    // Wave steps (Q6.2)
-    uint8_t stpRows[ROWSCOLS];
-    uint8_t stpCols[ROWSCOLS];
-    // Wave indices for row and col frequencies (Q14.2)
+    // Wave steps (Q8.8)
+    uint16_t stpRows[ROWSCOLS];
+    uint16_t stpCols[ROWSCOLS];
+    // Wave indices for row and col frequencies (Q8.8)
     uint16_t rowIdx, colIdx;
     // Identified row and col
     uint8_t row, col;
