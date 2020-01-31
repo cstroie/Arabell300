@@ -52,16 +52,7 @@ uint8_t WAVE::sample(uint8_t idx) {
   @param idx the wave sample index as Q8.8
 */
 uint8_t WAVE::sample(uint16_t idx) {
-  // Define a union of struct to get the high byte faster
-  union twobytes {
-    uint16_t word;
-    struct {
-      uint8_t high;
-      uint8_t low;
-    };
-  } index;
-  index.word = idx;
-  return this->sample((uint8_t)index.high);
+  return this->sample((uint8_t)(idx / 256));
 }
 
 /**
@@ -71,5 +62,5 @@ uint8_t WAVE::sample(uint16_t idx) {
   @return the step
 */
 uint16_t WAVE::getStep(uint16_t freq) {
-  return (uint16_t)((uint32_t)freq * this->full * (1 << 8) / F_SAMPLE);
+  return (uint16_t)(((uint32_t)freq * this->full * (1 << 9) / F_SAMPLE + 1) >> 1);
 }

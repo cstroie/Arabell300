@@ -24,6 +24,10 @@
 
 #include "afsk.h"
 
+#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+
+
 // The wave generator
 WAVE wave;
 
@@ -105,6 +109,9 @@ void AFSK::initSteps() {
 void AFSK::initHW() {
   //Disable interrupts
   cli();
+
+  // disable Timer0 !!! delay() is now not available
+  //cbi (TIMSK0, TOIE0);
 
   // TC1 Control Register B: No prescaling, WGM mode 12
   TCCR1A = 0;
@@ -198,6 +205,8 @@ void AFSK::clearRing() {
   Handle both the TX and RX
 */
 void AFSK::doTXRX() {
+  //Disable interrupts
+  cli();
   // Get the sample first
   rxSample = ADCH;
   if (this->onLine) {
@@ -208,6 +217,8 @@ void AFSK::doTXRX() {
   }
   // Handle the audio monitor
   this->spkHandle();
+  // Enable interrupts
+  sei();
 }
 
 /**
@@ -429,7 +440,7 @@ void AFSK::rxHandle(uint8_t sample) {
 
   rx.iirX[0] = rx.iirX[1];
   rx.iirX[1] = (ds * ss) >> 2;
-  
+
   rx.iirY[0] = rx.iirY[1];
   rx.iirY[1] = rx.iirX[0] + rx.iirX[1] + (rx.iirY[0] >> 1);
 
